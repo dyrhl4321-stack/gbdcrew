@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>근방단 QR코드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sans KR",sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;}
+.card{background:#111;border:1px solid #222;padding:40px 32px;display:flex;flex-direction:column;align-items:center;gap:20px;max-width:360px;width:100%;}
+.title{font-size:22px;font-weight:900;letter-spacing:.3em;color:#eee;}
+.sub{font-size:12px;color:#c8f542;letter-spacing:.15em;font-weight:700;}
+#qrcode{background:#fff;padding:12px;border-radius:4px;}
+.desc{font-size:12px;color:#555;letter-spacing:.08em;text-align:center;line-height:1.8;}
+.desc span{color:#c8f542;}
+.print-btn{padding:13px 32px;background:#c8f542;border:none;color:#000;font-size:12px;font-weight:900;letter-spacing:.2em;cursor:pointer;font-family:inherit;margin-top:8px;}
+.url{font-size:9px;color:#333;letter-spacing:.05em;word-break:break-all;text-align:center;}
+@media print{
+  body{background:#fff;}
+  .card{border:none;}
+  .print-btn{display:none;}
+  .title{color:#000;}
+  .sub{color:#555;}
+  .desc{color:#333;}
+  .desc span{color:#000;font-weight:700;}
+}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="title">GBD CREW</div>
+  <div class="sub">근방단 출석체크</div>
+  <div id="qrcode"></div>
+  <div class="desc">
+    📱 카메라로 QR을 스캔하세요<br>
+    본인 이름 선택 → <span>출석 완료!</span>
+  </div>
+  <div class="url">inspiring-tapioca-f90569.netlify.app?mode=checkin</div>
+  <button class="print-btn" onclick="window.print()">🖨️ 인쇄하기</button>
+</div>
+<script>
+new QRCode(document.getElementById("qrcode"), {
+  text: "https://inspiring-tapioca-f90569.netlify.app?mode=checkin",
+  width: 240,
+  height: 240,
+  colorDark: "#000000",
+  colorLight: "#ffffff",
+  correctLevel: QRCode.CorrectLevel.H
+});
+</script>
+</body>
+</html>

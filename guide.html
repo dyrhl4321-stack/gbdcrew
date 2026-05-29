@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GBD CREW 출석체크 사용 가이드</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@300;400;700;900&display=swap');
+
+:root {
+  --bg: #0a0a0a;
+  --card: #111;
+  --border: #1e1e1e;
+  --accent: #c8f542;
+  --blue: #4fc3f7;
+  --text: #e8e8e8;
+  --dim: #555;
+  --dim2: #333;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  line-height: 1.6;
+  padding-bottom: 60px;
+}
+
+/* 헤더 */
+.hero {
+  padding: 60px 24px 40px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -100px; left: 50%;
+  transform: translateX(-50%);
+  width: 400px; height: 400px;
+  background: radial-gradient(circle, rgba(200,245,66,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-tag {
+  display: inline-block;
+  font-size: 9px;
+  letter-spacing: .4em;
+  color: var(--accent);
+  border: 1px solid rgba(200,245,66,0.3);
+  padding: 4px 14px;
+  margin-bottom: 20px;
+}
+
+.hero-title {
+  font-family: 'Black Han Sans', sans-serif;
+  font-size: 32px;
+  letter-spacing: .15em;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.hero-sub {
+  font-size: 13px;
+  color: var(--dim);
+  letter-spacing: .08em;
+}
+
+/* 링크 카드 */
+.links-wrap {
+  max-width: 480px;
+  margin: 32px auto;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.link-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.link-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  width: 36px;
+  text-align: center;
+}
+
+.link-info { flex: 1; }
+
+.link-label {
+  font-size: 9px;
+  letter-spacing: .25em;
+  color: var(--dim);
+  margin-bottom: 3px;
+}
+
+.link-url {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 700;
+  word-break: break-all;
+  letter-spacing: .02em;
+}
+
+.link-desc {
+  font-size: 10px;
+  color: var(--dim);
+  margin-top: 3px;
+}
+
+.pw-badge {
+  background: rgba(200,245,66,0.1);
+  border: 1px solid rgba(200,245,66,0.2);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 10px;
+  letter-spacing: .1em;
+  flex-shrink: 0;
+}
+
+/* 섹션 */
+.section {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.section-num {
+  font-family: 'Black Han Sans', sans-serif;
+  font-size: 28px;
+  color: var(--accent);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: .08em;
+}
+
+.section-sub {
+  font-size: 10px;
+  color: var(--dim);
+  letter-spacing: .08em;
+  margin-top: 2px;
+}
+
+/* 스텝 */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.step {
+  display: flex;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  transition: border-color .2s;
+}
+
+.step.accent { border-left-color: var(--accent); }
+.step.blue { border-left-color: var(--blue); }
+
+.step-num {
+  font-family: 'Black Han Sans', sans-serif;
+  font-size: 18px;
+  color: var(--dim2);
+  flex-shrink: 0;
+  width: 24px;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.step.accent .step-num { color: var(--accent); }
+.step.blue .step-num { color: var(--blue); }
+
+.step-content { flex: 1; }
+
+.step-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.step-desc {
+  font-size: 11px;
+  color: var(--dim);
+  line-height: 1.6;
+}
+
+.step-desc b {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.step-desc .b2 {
+  color: var(--blue);
+}
+
+/* 팁 박스 */
+.tip-box {
+  background: rgba(200,245,66,0.04);
+  border: 1px solid rgba(200,245,66,0.15);
+  padding: 14px 16px;
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.tip-box.blue-tip {
+  background: rgba(79,195,247,0.04);
+  border-color: rgba(79,195,247,0.15);
+}
+
+.tip-ico { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+
+.tip-text {
+  font-size: 11px;
+  color: var(--dim);
+  line-height: 1.7;
+}
+
+.tip-text b { color: var(--accent); font-weight: 700; }
+.tip-text .b2 { color: var(--blue); font-weight: 700; }
+
+/* 역할 구분 */
+.role-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.role-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 16px 14px;
+}
+
+.role-card.admin { border-top: 2px solid var(--accent); }
+.role-card.member { border-top: 2px solid var(--blue); }
+
+.role-label {
+  font-size: 9px;
+  letter-spacing: .2em;
+  margin-bottom: 8px;
+}
+
+.role-card.admin .role-label { color: var(--accent); }
+.role-card.member .role-label { color: var(--blue); }
+
+.role-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.role-item {
+  font-size: 11px;
+  color: var(--dim);
+  padding: 3px 0;
+  border-bottom: 1px solid var(--dim2);
+  line-height: 1.5;
+}
+
+.role-item:last-child { border-bottom: none; }
+
+/* 구분선 */
+.divider {
+  max-width: 480px;
+  margin: 8px auto;
+  padding: 0 20px;
+}
+
+.divider hr {
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+/* 푸터 */
+.footer {
+  text-align: center;
+  padding: 40px 20px 0;
+  font-size: 10px;
+  color: var(--dim2);
+  letter-spacing: .15em;
+}
+
+.footer span { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- 히어로 -->
+<div class="hero">
+  <div class="hero-tag">OPERATION GUIDE</div>
+  <div class="hero-title">근방단 출석체크</div>
+  <div class="hero-sub">GBD CREW 운영진 사용 가이드</div>
+</div>
+
+<!-- 링크 정보 -->
+<div class="links-wrap">
+  <div class="link-card">
+    <div class="link-icon">👑</div>
+    <div class="link-info">
+      <div class="link-label">— 관리자 전용</div>
+      <div class="link-url">inspiring-tapioca-f90569.netlify.app</div>
+      <div class="link-desc">비밀번호 입력 후 출석·입금 관리</div>
+    </div>
+    <div class="pw-badge">PW: 5252</div>
+  </div>
+  <div class="link-card">
+    <div class="link-icon">📱</div>
+    <div class="link-info">
+      <div class="link-label">— 멤버 QR 체크인</div>
+      <div class="link-url">inspiring-tapioca-f90569.netlify.app?mode=checkin</div>
+      <div class="link-desc">QR 스캔 → 이름 선택 → 자동 출석</div>
+    </div>
+  </div>
+</div>
+
+<!-- 역할 구분 -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">①</div>
+    <div>
+      <div class="section-title">역할 구분</div>
+      <div class="section-sub">운영진 vs 멤버</div>
+    </div>
+  </div>
+  <div class="role-grid">
+    <div class="role-card admin">
+      <div class="role-label">ADMIN — 운영진</div>
+      <div class="role-title">👑 관리자</div>
+      <div class="role-item">날짜·이벤트명 변경</div>
+      <div class="role-item">인원 추가·삭제</div>
+      <div class="role-item">출석·입금 수동 체크</div>
+      <div class="role-item">결과 복사 → 카톡</div>
+    </div>
+    <div class="role-card member">
+      <div class="role-label">MEMBER — 멤버</div>
+      <div class="role-title">📱 일반 멤버</div>
+      <div class="role-item">현장 QR 스캔</div>
+      <div class="role-item">본인 이름 선택</div>
+      <div class="role-item">자동 출석 처리</div>
+      <div class="role-item">완료 화면 확인</div>
+    </div>
+  </div>
+</div>
+
+<!-- 정모 당일 순서 -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">②</div>
+    <div>
+      <div class="section-title">정모 당일 순서</div>
+      <div class="section-sub">운영진이 할 일</div>
+    </div>
+  </div>
+  <div class="steps">
+    <div class="step accent">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">관리자 링크 접속 + 로그인</div>
+        <div class="step-desc">
+          <b>inspiring-tapioca-f90569.netlify.app</b> 접속<br>
+          비밀번호 <b>5252</b> 입력
+        </div>
+      </div>
+    </div>
+    <div class="step accent">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">편집 버튼으로 정보 업데이트</div>
+        <div class="step-desc">
+          우측 상단 <b>✎ 편집</b> 클릭<br>
+          날짜 · 이벤트명 · 인원 수정 후 <b>저장</b>
+        </div>
+      </div>
+    </div>
+    <div class="step accent">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">QR 출력해서 현장에 부착</div>
+        <div class="step-desc">
+          <b>근방단_QR생성.html</b> 파일 열기<br>
+          🖨️ 인쇄 버튼 → 머리글/바닥글 해제 → 출력
+        </div>
+      </div>
+    </div>
+    <div class="step accent">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">멤버들 QR 찍으면 자동 출석!</div>
+        <div class="step-desc">
+          멤버가 QR 스캔 → 본인 이름 탭<br>
+          관리자 화면에 <b>실시간 반영</b> ✅
+        </div>
+      </div>
+    </div>
+    <div class="step blue">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <div class="step-title">입금 체크 (필요시)</div>
+        <div class="step-desc">
+          관리자 화면에서 각 멤버 <span class="b2">입금</span> 버튼 탭<br>
+          파란색으로 입금 완료 표시
+        </div>
+      </div>
+    </div>
+    <div class="step accent">
+      <div class="step-num">6</div>
+      <div class="step-content">
+        <div class="step-title">결과 복사 → 단톡방 공유</div>
+        <div class="step-desc">
+          하단 <b>결과 복사</b> 버튼 탭<br>
+          출석·입금·미출석 명단 자동 정리 → 카톡 붙여넣기
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tip-box">
+    <div class="tip-ico">💡</div>
+    <div class="tip-text">
+      <b>QR은 한 번만 출력하면 영구 사용 가능!</b><br>
+      날짜·인원이 바뀌어도 QR은 그대로 써요.<br>
+      다음 정모 때는 편집 버튼으로 정보만 바꾸면 끝!
+    </div>
+  </div>
+</div>
+
+<!-- 관리자 기능 -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">③</div>
+    <div>
+      <div class="section-title">관리자 화면 기능</div>
+      <div class="section-sub">비밀번호 5252로 접속</div>
+    </div>
+  </div>
+  <div class="steps">
+    <div class="step accent">
+      <div class="step-num">✎</div>
+      <div class="step-content">
+        <div class="step-title">편집 버튼</div>
+        <div class="step-desc">날짜 · 이벤트명 · 인원 추가/삭제/수정</div>
+      </div>
+    </div>
+    <div class="step accent">
+      <div class="step-num">✅</div>
+      <div class="step-content">
+        <div class="step-title">출석 버튼 (초록)</div>
+        <div class="step-desc">수동으로 출석 체크 · 한 번 더 누르면 취소</div>
+      </div>
+    </div>
+    <div class="step blue">
+      <div class="step-num">💰</div>
+      <div class="step-content">
+        <div class="step-title">입금 버튼 (파랑)</div>
+        <div class="step-desc">입금 완료 체크 · 한 번 더 누르면 취소</div>
+      </div>
+    </div>
+    <div class="step accent">
+      <div class="step-num">📋</div>
+      <div class="step-content">
+        <div class="step-title">결과 복사</div>
+        <div class="step-desc">출석/입금/미출석 명단 + 출석률 자동 정리해서 복사</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">🔄</div>
+      <div class="step-content">
+        <div class="step-title">초기화</div>
+        <div class="step-desc">모든 출석·입금 내역 초기화 (다음 정모 시작 전)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tip-box blue-tip">
+    <div class="tip-ico">⚡</div>
+    <div class="tip-text">
+      <span class="b2">실시간 연동</span>이라 여러 운영진이 동시에 접속해도 모두 같은 화면 공유돼요!<br>
+      한 명이 체크하면 다른 운영진 화면에도 바로 반영됩니다.
+    </div>
+  </div>
+</div>
+
+<!-- 주의사항 -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-num">④</div>
+    <div>
+      <div class="section-title">주의사항</div>
+      <div class="section-sub">꼭 읽어주세요</div>
+    </div>
+  </div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">⚠</div>
+      <div class="step-content">
+        <div class="step-title">관리자 링크 비공개 유지</div>
+        <div class="step-desc">
+          멤버들에게는 QR만 공유하세요.<br>
+          관리자 링크가 유출되면 누구나 수정 가능해요.
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">⚠</div>
+      <div class="step-content">
+        <div class="step-title">다음 정모 전 초기화 필수</div>
+        <div class="step-desc">
+          새 정모 시작 전 <b>초기화</b> 버튼 + <b>날짜 수정</b> 꼭 해주세요.<br>
+          안 하면 이전 출석 데이터가 남아있어요.
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">⚠</div>
+      <div class="step-content">
+        <div class="step-title">인터넷 연결 필수</div>
+        <div class="step-desc">
+          Firebase 실시간 연동이라 인터넷이 있어야 작동해요.<br>
+          오프라인에서는 사용 불가.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <p>GBD CREW <span>×</span> ATTENDANCE SYSTEM</p>
+  <p style="margin-top:6px;font-size:9px;">운영진 전용 문서 — 외부 공유 금지</p>
+</div>
+
+</body>
+</html>
