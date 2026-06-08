@@ -214,6 +214,16 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
 #done-msg.late{color:#ffa500;}
 #done-sub{font-size:11px;color:#333;text-align:center;}
 #done-back{margin-top:8px;padding:12px 32px;background:transparent;border:1px solid #1e1e1e;color:#333;font-size:11px;cursor:pointer;font-family:inherit;}
+/* 아카이브 수정 */
+.archive-card{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#111;border:1px solid #181818;margin-bottom:6px;cursor:pointer;transition:background .2s;}
+.archive-card:active{background:#161616;}
+.archive-card-left{flex:1;}
+.archive-card-date{font-size:13px;font-weight:700;color:#888;letter-spacing:.05em;}
+.archive-card-gym{font-size:10px;color:#333;margin-top:2px;}
+.archive-card-counts{display:flex;gap:10px;margin-top:5px;}
+.archive-count{font-size:10px;letter-spacing:.05em;}
+#archive-edit-modal{display:none;position:fixed;inset:0;background:#0a0a0a;z-index:200;overflow-y:auto;max-width:480px;margin:0 auto;}
+#archive-edit-modal.open{display:block;}
 </style>
 </head>
 <body>
@@ -358,6 +368,11 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
     <div class="alert-section-label">— 주의 멤버</div>
     <div id="alert-list"></div>
   </div>
+  <!-- 지난 모임 수정 -->
+  <div class="table-wrap" style="margin-top:8px;">
+    <div class="table-section-label">— 지난 모임 수정</div>
+    <div id="archive-meeting-list"></div>
+  </div>
   <!-- 전체 테이블 -->
   <div class="table-wrap">
     <div class="table-section-label">— 전체 현황</div>
@@ -427,7 +442,7 @@ const memberStatsRef = doc(db, "gbd_stats", "members");
 const ADMIN_PW = "5252";
 const LATE_MINUTES = 5; // 지각 기준: 시작 후 5분
 
-let meetings=[], archives=[], memberStats={}, currentMeetingId=null;
+let meetings=[], archives=[], memberStats={}, currentMeetingId=null, currentArchiveEditId=null;
 let editMeetingId=null, selectedType="jeongmo", editMembers=[];
 let selectedCheckinMeetingId=null;
 const params = new URLSearchParams(window.location.search);
@@ -541,6 +556,10 @@ onSnapshot(archiveQ, snap=>{
   archives = snap.docs.map(d=>({id:d.id,...d.data()}));
   if(document.getElementById("page-stats").classList.contains("active")){
     renderStatsPage();
+  }
+  if(currentArchiveEditId){
+    const m=archives.find(a=>a.id===currentArchiveEditId);
+    if(m) renderArchiveModalMembers(m);
   }
 });
 
@@ -912,7 +931,104 @@ function renderStatsPage(){
       <td class="${d.is3mClean?"td-3mo":""}">${d.is3mClean?"✨":d.lateIn3mo+"회"}</td>`;
     tbody.appendChild(tr);
   });
+  renderArchiveListInStats();
 }
+
+function renderArchiveListInStats(){
+  const list=document.getElementById("archive-meeting-list");
+  if(!list) return;
+  list.innerHTML="";
+  const allPast=[...archives].sort((a,b)=>b.date.localeCompare(a.date));
+  if(!allPast.length){
+    list.innerHTML='<div style="font-size:11px;color:#222;padding:12px 0;letter-spacing:.1em;">지난 모임 없음</div>';
+    return;
+  }
+  allPast.forEach(m=>{
+    const status=m.status||[], members=m.members||[];
+    const attCnt=members.filter((_,i)=>status[i]&&(status[i].attend||status[i].late)).length;
+    const lateCnt=members.filter((_,i)=>status[i]&&status[i].late).length;
+    const absCnt=members.filter((_,i)=>status[i]&&status[i].absent).length;
+    const cancelCnt=members.filter((_,i)=>status[i]&&status[i].cancel).length;
+    const dateStr=m.date?m.date.replace(/-/g,"."):"";
+    const typeStr=m.type==="jeongmo"?"정모":"벙";
+    const card=document.createElement("div");
+    card.className="archive-card";
+    card.innerHTML=`<div class="archive-card-left">
+        <div class="archive-card-date">${dateStr} <span style="font-size:10px;color:#555;">${typeStr}</span></div>
+        <div class="archive-card-gym">${m.gym||""}</div>
+        <div class="archive-card-counts">
+          <span class="archive-count" style="color:#c8f542;">출석 ${attCnt}</span>
+          <span class="archive-count" style="color:#ffa500;">지각 ${lateCnt}</span>
+          <span class="archive-count" style="color:#ff4444;">불참 ${absCnt}</span>
+          <span class="archive-count" style="color:#555;">취소 ${cancelCnt}</span>
+        </div>
+      </div>
+      <span style="color:#333;font-size:18px;">›</span>`;
+    card.onclick=()=>openArchiveEdit(m.id);
+    list.appendChild(card);
+  });
+}
+
+window.openArchiveEdit=function(id){
+  const m=archives.find(a=>a.id===id);
+  if(!m) return;
+  currentArchiveEditId=id;
+  const dateStr=m.date?m.date.replace(/-/g,"."):"";
+  const typeStr=m.type==="jeongmo"?"정모":"벙";
+  document.getElementById("archive-modal-title").textContent=`${dateStr} ${typeStr} · ${m.gym||""}`;
+  renderArchiveModalMembers(m);
+  document.getElementById("archive-edit-modal").classList.add("open");
+};
+
+function renderArchiveModalMembers(m){
+  const body=document.getElementById("archive-modal-body");
+  body.innerHTML="";
+  const members=m.members||[], status=m.status||[];
+  members.forEach((name,i)=>{
+    const st=status[i]||{};
+    const card=document.createElement("div");
+    card.className=`mc ${st.absent?"absent":st.cancel?"cancel":st.late?"late":st.attend?"att":""}`;
+    const lateBadge=st.absent?`<span class="mlate-badge absent-badge">불참</span>`:
+      st.cancel?`<span class="mlate-badge" style="color:#ff4444;">취소</span>`:
+      st.late?`<span class="mlate-badge">지각</span>`:"";
+    card.innerHTML=`<div class="mbar"></div>
+      <div class="mnum">${i+1}</div>
+      <div class="mname">${name}</div>
+      ${lateBadge}
+      <button class="mbtn ${st.absent?"absent-on":st.cancel?"cancel-on":st.late?"late-on":st.attend?"att-on":""}" onclick="toggleArchiveAttend('${m.id}',${i})">${st.absent?"❌ 불참":st.cancel?"🚫 취소":st.late?"🕐 지각":st.attend?"✓ 출석":"출석"}</button>
+      <button class="mbtn ${st.pay?"pay-on":""}" onclick="toggleArchivePay('${m.id}',${i})">${st.pay?"✓ 입금":"입금"}</button>`;
+    body.appendChild(card);
+  });
+}
+
+window.toggleArchiveAttend=async function(id,i){
+  const m=archives.find(a=>a.id===id);
+  if(!m) return;
+  const status=[...(m.status||m.members.map(()=>({attend:false,late:false,cancel:false,absent:false,pay:false})))];
+  if(!status[i]) status[i]={attend:false,late:false,cancel:false,absent:false,pay:false};
+  const st=status[i];
+  const base={...st,attend:false,late:false,cancel:false,absent:false};
+  if(!st.attend&&!st.late&&!st.cancel&&!st.absent){status[i]={...base,attend:true};}
+  else if(st.attend){status[i]={...base,late:true};}
+  else if(st.late){status[i]={...base,cancel:true};}
+  else if(st.cancel){status[i]={...base,absent:true};}
+  else{status[i]={...base};}
+  await setDoc(doc(db,"gbd_archive",id),{...m,status});
+};
+
+window.toggleArchivePay=async function(id,i){
+  const m=archives.find(a=>a.id===id);
+  if(!m) return;
+  const status=[...(m.status||m.members.map(()=>({attend:false,late:false,pay:false})))];
+  if(!status[i]) status[i]={pay:false};
+  status[i]={...status[i],pay:!status[i].pay};
+  await setDoc(doc(db,"gbd_archive",id),{...m,status});
+};
+
+window.closeArchiveEdit=function(){
+  document.getElementById("archive-edit-modal").classList.remove("open");
+  currentArchiveEditId=null;
+};
 
 window.openDeductModal=function(){
   // 차감 가능한 멤버 선택 팝업
@@ -1113,5 +1229,13 @@ window.backToMeetingSelect=function(){
   renderCheckinMeetings();
 };
 </script>
+<!-- 아카이브 수정 모달 -->
+<div id="archive-edit-modal">
+  <div class="modal-header">
+    <button class="modal-cancel" onclick="closeArchiveEdit()">← 닫기</button>
+    <div id="archive-modal-title" style="font-size:13px;font-weight:900;color:#eee;letter-spacing:.05em;flex:1;padding:0 12px;"></div>
+  </div>
+  <div id="archive-modal-body" style="padding:8px 16px 80px;display:flex;flex-direction:column;gap:5px;"></div>
+</div>
 </body>
 </html>
