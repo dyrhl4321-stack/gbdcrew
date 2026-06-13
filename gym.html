@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>근방단 출석 현황</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sans KR",sans-serif;min-height:100vh;max-width:480px;margin:0 auto;}
+
+.header{padding:18px 20px 14px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;gap:12px;position:sticky;top:0;background:rgba(10,10,10,0.97);z-index:10;backdrop-filter:blur(10px);}
+.logo{width:30px;height:30px;background:#c8f542;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#000;flex-shrink:0;}
+.header-texts{flex:1;}
+.header-title{font-size:16px;font-weight:900;letter-spacing:.08em;color:#fff;}
+.header-sub{font-size:10px;color:#333;margin-top:2px;letter-spacing:.05em;}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#c8f542;animation:pulse 1.8s ease-in-out infinite;flex-shrink:0;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(0.85)}}
+
+/* 모임 탭 */
+#meeting-tabs{display:flex;gap:8px;padding:14px 16px 0;overflow-x:auto;scrollbar-width:none;}
+#meeting-tabs::-webkit-scrollbar{display:none;}
+.mtab{flex-shrink:0;padding:9px 16px;background:#141414;border:1px solid #1e1e1e;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;color:#555;transition:all .2s;white-space:nowrap;}
+.mtab.active{background:rgba(200,245,66,.1);border-color:rgba(200,245,66,.3);color:#c8f542;}
+
+/* 모임 정보 */
+#meeting-info{padding:14px 20px 10px;}
+.info-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.info-badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:4px;}
+.badge-jeongmo{background:rgba(200,245,66,.1);border:1px solid rgba(200,245,66,.2);color:#c8f542;}
+.badge-beong{background:rgba(79,195,247,.1);border:1px solid rgba(79,195,247,.2);color:#4fc3f7;}
+.info-gym{font-size:14px;font-weight:700;color:#ddd;}
+.info-time{font-size:12px;color:#444;}
+
+/* 요약 통계 */
+#summary{display:flex;border-top:1px solid #141414;border-bottom:1px solid #141414;margin:0 0 4px;}
+.sum-item{flex:1;text-align:center;padding:12px 4px;}
+.sum-item+.sum-item{border-left:1px solid #141414;}
+.sum-num{font-size:20px;font-weight:900;line-height:1;}
+.sum-lbl{font-size:9px;letter-spacing:.15em;color:#333;margin-top:3px;}
+.sum-att .sum-num{color:#c8f542;}
+.sum-late .sum-num{color:#ffa500;}
+.sum-cancel .sum-num{color:#ff4444;}
+.sum-absent .sum-num{color:#883333;}
+
+/* 진행바 */
+#prog-wrap{height:2px;background:#111;margin-bottom:16px;}
+#prog-bar{height:100%;width:0;background:linear-gradient(90deg,#c8f542,#a8d400);transition:width .5s ease;}
+
+/* 멤버 리스트 */
+#member-list{padding:0 16px 40px;display:flex;flex-direction:column;gap:5px;}
+.mc{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#111;border:1px solid #181818;position:relative;overflow:hidden;}
+.mbar{position:absolute;left:0;top:0;bottom:0;width:3px;background:#1e1e1e;}
+.mc.att .mbar{background:#c8f542;}
+.mc.late .mbar{background:#ffa500;}
+.mc.cancel .mbar{background:#ff4444;}
+.mc.absent .mbar{background:#883333;}
+.mnum{font-size:10px;color:#2a2a2a;width:20px;text-align:center;font-weight:700;flex-shrink:0;}
+.mname{flex:1;font-size:15px;font-weight:700;color:#555;letter-spacing:.02em;}
+.mc.att .mname{color:#fff;}
+.mc.late .mname{color:#ddd;}
+.mc.cancel .mname{color:#555;text-decoration:line-through;}
+.mc.absent .mname{color:#4a2a2a;}
+.mstatus{font-size:11px;font-weight:700;flex-shrink:0;padding:4px 10px;border-radius:4px;}
+.status-none{color:#2a2a2a;background:#141414;border:1px solid #1e1e1e;}
+.status-att{color:#000;background:#c8f542;}
+.status-late{color:#000;background:#ffa500;}
+.status-cancel{color:#ff6666;background:rgba(255,68,68,.1);border:1px solid rgba(255,68,68,.2);}
+.status-absent{color:#883333;background:rgba(120,50,50,.15);border:1px solid rgba(120,50,50,.2);}
+
+/* 빈 상태 */
+#empty{display:none;flex-direction:column;align-items:center;justify-content:center;padding:80px 24px;gap:14px;}
+#empty .e-icon{font-size:44px;}
+#empty .e-text{font-size:12px;color:#333;letter-spacing:.08em;text-align:center;line-height:1.8;}
+
+/* 동기화 바 */
+#sync-bar{text-align:center;font-size:10px;color:#333;padding:6px;letter-spacing:.1em;border-top:1px solid #141414;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:rgba(10,10,10,.95);}
+#sync-bar.synced{color:#c8f542;}
+#sync-bar.error{color:#ff4444;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">G</div>
+  <div class="header-texts">
+    <div class="header-title">GBD CREW</div>
+    <div class="header-sub">헬스장 출석 현황 · 읽기 전용</div>
+  </div>
+  <div class="live-dot"></div>
+</div>
+
+<div id="meeting-tabs"></div>
+<div id="meeting-info"></div>
+<div id="summary" style="display:none">
+  <div class="sum-item sum-att"><div class="sum-num" id="s-att">0</div><div class="sum-lbl">출석</div></div>
+  <div class="sum-item sum-late"><div class="sum-num" id="s-late">0</div><div class="sum-lbl">지각</div></div>
+  <div class="sum-item sum-cancel"><div class="sum-num" id="s-cancel">0</div><div class="sum-lbl">취소</div></div>
+  <div class="sum-item sum-absent"><div class="sum-num" id="s-absent">0</div><div class="sum-lbl">불참</div></div>
+  <div class="sum-item"><div class="sum-num" id="s-total" style="color:#888">0</div><div class="sum-lbl">전체</div></div>
+</div>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+<div id="member-list"></div>
+<div id="empty"><div class="e-icon">📋</div><div class="e-text">오늘 등록된 모임이 없어요</div></div>
+<div id="sync-bar">● 연결 중...</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, onSnapshot, orderBy, query } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBAdgC1pYJ9bAEWGTO_UoP4C84Q1d_jVtw",
+  authDomain: "gbdcrewcheck-2af48.firebaseapp.com",
+  projectId: "gbdcrewcheck-2af48",
+  storageBucket: "gbdcrewcheck-2af48.firebasestorage.app",
+  messagingSenderId: "57726309639",
+  appId: "1:57726309639:web:9bb1edc21cb48fdd49a1a2"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let meetings = [];
+let selectedId = null;
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function syncBar(cls, txt) {
+  const el = document.getElementById('sync-bar');
+  el.className = cls; el.textContent = txt;
+}
+
+onSnapshot(query(collection(db, 'gbd_meetings'), orderBy('date', 'asc')), snap => {
+  meetings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  syncBar('synced', '● 실시간 연동 중');
+  renderTabs();
+}, () => syncBar('error', '● 연결 오류'));
+
+function renderTabs() {
+  const today = todayStr();
+  // 오늘 이후 모임 우선, 없으면 가장 최근
+  const upcoming = meetings.filter(m => m.date >= today);
+  const visible = upcoming.length ? upcoming : meetings.slice(-3);
+
+  if (!visible.length) {
+    document.getElementById('empty').style.display = 'flex';
+    document.getElementById('summary').style.display = 'none';
+    document.getElementById('member-list').innerHTML = '';
+    document.getElementById('meeting-tabs').innerHTML = '';
+    document.getElementById('meeting-info').innerHTML = '';
+    return;
+  }
+  document.getElementById('empty').style.display = 'none';
+
+  // 기본 선택: 오늘 모임 또는 가장 가까운 것
+  if (!selectedId || !visible.find(m => m.id === selectedId)) {
+    const todayMeeting = visible.find(m => m.date === today);
+    selectedId = todayMeeting ? todayMeeting.id : visible[0].id;
+  }
+
+  const tabsEl = document.getElementById('meeting-tabs');
+  tabsEl.innerHTML = visible.map(m => {
+    const label = m.date === today ? '오늘' : m.date ? m.date.slice(5).replace('-','/') : '';
+    const typeEmoji = m.type === 'jeongmo' ? '🏋️' : '⚡';
+    return `<div class="mtab${m.id===selectedId?' active':''}" onclick="selectMeeting('${m.id}')">${typeEmoji} ${label}</div>`;
+  }).join('');
+
+  renderMeeting();
+}
+
+window.selectMeeting = function(id) {
+  selectedId = id;
+  renderTabs();
+};
+
+function renderMeeting() {
+  const m = meetings.find(x => x.id === selectedId);
+  if (!m) return;
+
+  const typeLabel = m.type === 'jeongmo' ? '정모' : '벙';
+  const badgeCls = m.type === 'jeongmo' ? 'badge-jeongmo' : 'badge-beong';
+  const dateStr = m.date ? m.date.replace(/-/g, '.') : '';
+  document.getElementById('meeting-info').innerHTML = `
+    <div class="info-row">
+      <span class="info-badge ${badgeCls}">${typeLabel}</span>
+      <span class="info-gym">${m.gym || ''}</span>
+    </div>
+    <div class="info-time">${dateStr}${m.startTime ? ' · ' + m.startTime : ''}</div>`;
+
+  const members = m.members || [];
+  const status = m.status || [];
+  let att=0, late=0, cancel=0, absent=0;
+  members.forEach((_,i) => {
+    const st = status[i] || {};
+    if (st.absent) absent++;
+    else if (st.cancel) cancel++;
+    else if (st.late) late++;
+    else if (st.attend) att++;
+  });
+
+  document.getElementById('summary').style.display = 'flex';
+  document.getElementById('s-att').textContent = att;
+  document.getElementById('s-late').textContent = late;
+  document.getElementById('s-cancel').textContent = cancel;
+  document.getElementById('s-absent').textContent = absent;
+  document.getElementById('s-total').textContent = members.length;
+
+  const checked = att + late;
+  document.getElementById('prog-bar').style.width = members.length ? Math.round(checked / members.length * 100) + '%' : '0%';
+
+  const list = document.getElementById('member-list');
+  list.innerHTML = members.map((name, i) => {
+    const st = status[i] || {};
+    let cls = 'mc', statusTxt = '미체크', statusCls = 'status-none';
+    if (st.absent)       { cls += ' absent'; statusTxt = '❌ 불참'; statusCls = 'status-absent'; }
+    else if (st.cancel)  { cls += ' cancel'; statusTxt = '🚫 취소'; statusCls = 'status-cancel'; }
+    else if (st.late)    { cls += ' late';   statusTxt = '🕐 지각'; statusCls = 'status-late'; }
+    else if (st.attend)  { cls += ' att';    statusTxt = '✓ 출석'; statusCls = 'status-att'; }
+    return `<div class="${cls}">
+      <div class="mbar"></div>
+      <span class="mnum">${String(i+1).padStart(2,'0')}</span>
+      <span class="mname">${name}</span>
+      <span class="mstatus ${statusCls}">${statusTxt}</span>
+    </div>`;
+  }).join('');
+}
+</script>
+</body>
+</html>
