@@ -214,16 +214,6 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
 #done-msg.late{color:#ffa500;}
 #done-sub{font-size:11px;color:#333;text-align:center;}
 #done-back{margin-top:8px;padding:12px 32px;background:transparent;border:1px solid #1e1e1e;color:#333;font-size:11px;cursor:pointer;font-family:inherit;}
-/* 아카이브 수정 */
-.archive-card{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#111;border:1px solid #181818;margin-bottom:6px;cursor:pointer;transition:background .2s;}
-.archive-card:active{background:#161616;}
-.archive-card-left{flex:1;}
-.archive-card-date{font-size:13px;font-weight:700;color:#888;letter-spacing:.05em;}
-.archive-card-gym{font-size:10px;color:#333;margin-top:2px;}
-.archive-card-counts{display:flex;gap:10px;margin-top:5px;}
-.archive-count{font-size:10px;letter-spacing:.05em;}
-#archive-edit-modal{display:none;position:fixed;inset:0;background:#0a0a0a;z-index:200;overflow-y:auto;max-width:480px;margin:0 auto;}
-#archive-edit-modal.open{display:block;}
 </style>
 </head>
 <body>
@@ -368,11 +358,6 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
     <div class="alert-section-label">— 주의 멤버</div>
     <div id="alert-list"></div>
   </div>
-  <!-- 지난 모임 수정 -->
-  <div class="table-wrap" style="margin-top:8px;">
-    <div class="table-section-label">— 지난 모임 수정</div>
-    <div id="archive-meeting-list"></div>
-  </div>
   <!-- 전체 테이블 -->
   <div class="table-wrap">
     <div class="table-section-label">— 전체 현황</div>
@@ -422,7 +407,7 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, collection, setDoc, deleteDoc, onSnapshot, orderBy, query, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, collection, setDoc, deleteDoc, onSnapshot, orderBy, query, getDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBAdgC1pYJ9bAEWGTO_UoP4C84Q1d_jVtw",
@@ -436,13 +421,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const meetingsRef = collection(db, "gbd_meetings");
-const archiveRef = collection(db, "gbd_archive");
 const memberStatsRef = doc(db, "gbd_stats", "members");
 
 const ADMIN_PW = "5252";
 const LATE_MINUTES = 5; // 지각 기준: 시작 후 5분
 
-let meetings=[], archives=[], memberStats={}, currentMeetingId=null, currentArchiveEditId=null;
+let meetings=[], memberStats={}, currentMeetingId=null;
 let editMeetingId=null, selectedType="jeongmo", editMembers=[];
 let selectedCheckinMeetingId=null;
 const params = new URLSearchParams(window.location.search);
@@ -459,29 +443,6 @@ function setSyncBar(cls,txt){
 }
 
 // 실시간 모임 리스닝
-// ── 자동 아카이브 처리 ──
-async function autoArchiveCheck(){
-  const now = new Date();
-  now.setHours(0,0,0,0);
-  for(const m of meetings){
-    if(!m.date) continue;
-    const md = new Date(m.date);
-    md.setHours(0,0,0,0);
-    // 오늘보다 이전 날짜 모임 → 아카이브로 이동
-    if(md < now){
-      try{
-        // 1. gbd_archive에 저장
-        await setDoc(doc(db,"gbd_archive",m.id), {...m, archivedAt: new Date().toISOString()});
-        // 2. gbd_meetings에서 삭제
-        await deleteDoc(doc(db,"gbd_meetings",m.id));
-        console.log("아카이브 완료:", m.id);
-      }catch(e){
-        console.error("아카이브 실패:", e);
-      }
-    }
-  }
-}
-
 // ── 자동 불참 처리 ──
 async function autoAbsentCheck(){
   const now=new Date();
@@ -496,10 +457,8 @@ async function autoAbsentCheck(){
     let changed=false;
     members.forEach((_,i)=>{
       const st=status[i]||{};
-      // 완전한 미체크 상태만 자동 불참 처리
-      // attend/late/cancel/absent/pay 중 어느 것도 true가 아닌 경우만
-      const hasAnyStatus=st.attend||st.late||st.cancel||st.absent||st.pay;
-      if(!hasAnyStatus){
+      // 미체크 상태인 경우만 자동 불참 처리
+      if(!st.attend&&!st.late&&!st.cancel&&!st.absent){
         status[i]={...st,absent:true};
         changed=true;
       }
@@ -539,8 +498,6 @@ onSnapshot(q, snap=>{
         currentActivePage="main";
         showPage("page-main");
         renderMeetingTabs();
-        // 앱 로드시 아카이브 체크
-        setTimeout(autoArchiveCheck, 2000);
       } else {
         updateCurrentPage();
       }
@@ -549,19 +506,6 @@ onSnapshot(q, snap=>{
     }
   }
 },()=>setSyncBar("error","● 연결 오류"));
-
-// 아카이브 실시간 리스닝
-const archiveQ = query(archiveRef, orderBy("date","asc"));
-onSnapshot(archiveQ, snap=>{
-  archives = snap.docs.map(d=>({id:d.id,...d.data()}));
-  if(document.getElementById("page-stats").classList.contains("active")){
-    renderStatsPage();
-  }
-  if(currentArchiveEditId){
-    const m=archives.find(a=>a.id===currentArchiveEditId);
-    if(m) renderArchiveModalMembers(m);
-  }
-});
 
 // 멤버 통계 리스닝
 onSnapshot(memberStatsRef, snap=>{
@@ -599,9 +543,7 @@ window.checkPw=function(){
     sessionStorage.setItem("gbd_admin","ok");
     document.getElementById("pw-err").textContent="";
     document.getElementById("pw-input").value="";
-    currentActivePage="main";
     showPage("page-main");renderMeetingTabs();
-    setTimeout(autoArchiveCheck,500);
   }else{
     document.getElementById("pw-err").textContent="❌ 비밀번호가 틀렸어요";
     document.getElementById("pw-input").value="";
@@ -654,7 +596,7 @@ function renderCurrentMeeting(){
   const absent=status.filter(s=>s&&s.absent).length;
   const unchecked=members.length-(att+late+cancel+absent);
   const fee=m.fee||0;
-  const gongeum=(absent+cancel)*Number(fee||0);
+  const gongeum=(absent+cancel)*fee;
   document.getElementById("s-total").textContent=members.length;
   document.getElementById("s-att").textContent=att;
   document.getElementById("s-late").textContent=late;
@@ -691,33 +633,37 @@ function renderCurrentMeeting(){
 
 // 출석 토글: 미체크→출석→지각→취소→불참→미체크
 async function toggleAttend(i){
-  const m=meetings.find(m=>m.id===currentMeetingId);
-  if(!m) return;
-  const status=[...(m.status||m.members.map(()=>({attend:false,late:false,cancel:false,absent:false,pay:false})))];
-  if(!status[i]) status[i]={attend:false,late:false,cancel:false,absent:false,pay:false};
-  const st=status[i];
-  const base={...st,attend:false,late:false,cancel:false,absent:false};
-  if(!st.attend&&!st.late&&!st.cancel&&!st.absent){
-    status[i]={...base,attend:true};        // 미체크 → 출석
-  } else if(st.attend){
-    status[i]={...base,late:true};          // 출석 → 지각
-  } else if(st.late){
-    status[i]={...base,cancel:true};        // 지각 → 취소
-  } else if(st.cancel){
-    status[i]={...base,absent:true};        // 취소 → 불참
-  } else {
-    status[i]={...base};                    // 불참 → 미체크
-  }
-  await setDoc(doc(db,"gbd_meetings",currentMeetingId),{...m,status});
+  const ref=doc(db,"gbd_meetings",currentMeetingId);
+  await runTransaction(db,async t=>{
+    const snap=await t.get(ref);
+    if(!snap.exists()) return;
+    const data=snap.data();
+    const members=data.members||[];
+    const status=[...(data.status||members.map(()=>({attend:false,late:false,cancel:false,absent:false,pay:false})))];
+    if(!status[i]) status[i]={attend:false,late:false,cancel:false,absent:false,pay:false};
+    const st=status[i];
+    const base={...st,attend:false,late:false,cancel:false,absent:false};
+    if(!st.attend&&!st.late&&!st.cancel&&!st.absent) status[i]={...base,attend:true};
+    else if(st.attend)  status[i]={...base,late:true};
+    else if(st.late)    status[i]={...base,cancel:true};
+    else if(st.cancel)  status[i]={...base,absent:true};
+    else                status[i]={...base};
+    t.update(ref,{status});
+  });
 }
 
 async function toggle(i,field){
-  const m=meetings.find(m=>m.id===currentMeetingId);
-  if(!m) return;
-  const status=[...(m.status||m.members.map(()=>({attend:false,late:false,pay:false})))];
-  if(!status[i]) status[i]={attend:false,late:false,pay:false};
-  status[i][field]=!status[i][field];
-  await setDoc(doc(db,"gbd_meetings",currentMeetingId),{...m,status});
+  const ref=doc(db,"gbd_meetings",currentMeetingId);
+  await runTransaction(db,async t=>{
+    const snap=await t.get(ref);
+    if(!snap.exists()) return;
+    const data=snap.data();
+    const members=data.members||[];
+    const status=[...(data.status||members.map(()=>({attend:false,late:false,cancel:false,absent:false,pay:false})))];
+    if(!status[i]) status[i]={attend:false,late:false,cancel:false,absent:false,pay:false};
+    status[i][field]=!status[i][field];
+    t.update(ref,{status});
+  });
 }
 
 window.resetAll=async function(){
@@ -735,16 +681,12 @@ window.copyResult=function(){
   const attended=members.filter((_,i)=>status[i]&&(status[i].attend||status[i].late));
   // 입금자
   const paid=members.filter((_,i)=>status[i]&&status[i].pay);
-  // 미입금자 = 취소/불참/미체크 제외한 전체 멤버 중 입금 안 한 사람
-  // (취소자, 불참자는 환불불가이므로 미입금자에서 제외)
+  // 미입금자 = 참가자 중 입금 안 한 사람
+  const unpaid=attended.filter(n=>!paid.includes(n));
+  // 취소자
   const canceled=members.filter((_,i)=>status[i]&&status[i].cancel);
+  // 불참자
   const absent=members.filter((_,i)=>status[i]&&status[i].absent);
-  // 미입금자 = 전체 멤버 중 (취소/불참 아니고) 입금 안 한 사람
-  const unpaid=members.filter((_,i)=>{
-    const st=status[i]||{};
-    if(st.cancel||st.absent) return false; // 취소/불참자 제외
-    return !st.pay; // 입금 안 한 사람
-  });
   const typeStr=m.type==="jeongmo"?"정모":"벙";
   const dateStr=m.date?m.date.replace(/-/g,"."):"";
   const text=`📋 근방단 ${typeStr} 참가 및 입금 현황 (${dateStr})
@@ -795,36 +737,26 @@ function renderStatsPage(){
   document.getElementById("stats-period").textContent=`${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,"0")} 기준`;
 
   // 전체 멤버 수집
-  // 현재 모임 + 아카이브 모두 집계
-  const allMeetings=[...meetings,...archives];
   const allMembers=new Set();
-  allMeetings.forEach(m=>(m.members||[]).forEach(n=>allMembers.add(n)));
+  meetings.forEach(m=>(m.members||[]).forEach(n=>allMembers.add(n)));
 
   const computed={};
   allMembers.forEach(name=>{ computed[name]={attend:0,late:0,absent:0}; });
 
-  const today=new Date(); today.setHours(23,59,59,999);
-  allMeetings.forEach(m=>{
+  const today=new Date(); today.setHours(0,0,0,0);
+  meetings.forEach(m=>{
     if(!m.date) return;
     const md=new Date(m.date); md.setHours(0,0,0,0);
-    const isPast=md<=today;
+    if(md>today) return;
     const members=m.members||[], status=m.status||[];
     members.forEach((name,i)=>{
-      if(!computed[name]) computed[name]={attend:0,late:0,absent:0,cancel:0};
+      if(!computed[name]) computed[name]={attend:0,late:0,absent:0};
       const st=status[i]||{};
-      if(st.cancel){
-        // 취소는 미래 모임이어도 즉시 반영
-        computed[name].cancel=(computed[name].cancel||0)+1;
-      } else if(isPast){
-        // 출석/지각/불참은 지난 모임만 반영
-        if(st.absent){
-          computed[name].absent=(computed[name].absent||0)+1;
-        } else if(st.late){
-          computed[name].late=(computed[name].late||0)+1;
-        } else if(st.attend){
-          computed[name].attend=(computed[name].attend||0)+1;
-        }
-      }
+      if(st.late&&!st.cancel&&!st.absent) computed[name].late++;
+      else if(st.attend&&!st.cancel&&!st.absent) computed[name].attend++;
+      else if(st.cancel) computed[name].cancel=(computed[name].cancel||0)+1;
+      else if(st.absent) computed[name].absent++;
+      // 미체크는 아직 진행중 모임이므로 집계 안함
     });
   });
 
@@ -837,7 +769,7 @@ function renderStatsPage(){
     computed[name].lateDisplay=realLate;
     computed[name].warning=Math.floor(realLate/2)+computed[name].absent;
     let lateIn3mo=0;
-    allMeetings.forEach(m=>{
+    meetings.forEach(m=>{
       if(!m.date) return;
       const md=new Date(m.date); md.setHours(0,0,0,0);
       if(md>=threeMonthAgo&&md<=today){
@@ -864,17 +796,18 @@ function renderStatsPage(){
   document.getElementById("sum-absent").textContent=totalAbsent;
   document.getElementById("sum-warn").textContent=totalWarn;
 
-  // 공금 계산: 취소/불참 모두 status에 반영되는 순간 즉시 공금 적립
+  // 공금 계산
   const gongeumList=document.getElementById("gongeum-list");
   gongeumList.innerHTML="";
   let totalGongeum=0;
-  allMeetings.forEach(m=>{
+  meetings.forEach(m=>{
     if(!m.date||!m.fee) return;
+    const md=new Date(m.date); md.setHours(0,0,0,0);
+    if(md>today) return;
     const members2=m.members||[], status2=m.status||[];
-    const cancelCnt=members2.filter((_,i)=>status2[i]&&status2[i].cancel).length;
     const absentCnt=members2.filter((_,i)=>status2[i]&&status2[i].absent).length;
-    const fee2=Number(m.fee)||0;
-    const amt=(absentCnt+cancelCnt)*fee2;
+    const cancelCnt=members2.filter((_,i)=>status2[i]&&status2[i].cancel).length;
+    const amt=(absentCnt+cancelCnt)*m.fee;
     if(amt<=0) return;
     totalGongeum+=amt;
     const dateStr=m.date.replace(/-/g,".");
@@ -885,8 +818,6 @@ function renderStatsPage(){
       <span style="color:#c8f542;font-weight:700;">+${amt.toLocaleString()}원</span>`;
     gongeumList.appendChild(row);
   });
-  console.log("공금계산:", meetings.map(m=>({id:m.id,fee:m.fee,status:m.status})));
-  console.log("totalGongeum:", totalGongeum);
   document.getElementById("gongeum-total").textContent=totalGongeum.toLocaleString()+"원";
 
   // 경고 알림
@@ -925,117 +856,18 @@ function renderStatsPage(){
     tr.innerHTML=`<td>${name}</td>
       <td class="${(d.attend||0)>0?"td-att":""}">${d.attend||0}</td>
       <td class="${(d.lateDisplay||0)>0?"td-late":""}">${d.lateDisplay||0}</td>
-      <td class="${cancelCnt2>0?"td-absent":""}">${cancelCnt2||0}</td>
+      <td class="${cancelCnt2>0?"td-absent":""}">${cancelCnt2||"-"}</td>
       <td class="${(d.absent||0)>0?"td-absent":""}">${d.absent||0}</td>
-      <td class="${w>=2?"td-warn-2":w>=1?"td-warn-1":"td-warn-0"}">${w||0}</td>
+      <td class="${w>=2?"td-warn-2":w>=1?"td-warn-1":"td-warn-0"}">${w||"-"}</td>
       <td class="${d.is3mClean?"td-3mo":""}">${d.is3mClean?"✨":d.lateIn3mo+"회"}</td>`;
     tbody.appendChild(tr);
   });
-  renderArchiveListInStats();
 }
-
-function renderArchiveListInStats(){
-  const list=document.getElementById("archive-meeting-list");
-  if(!list) return;
-  list.innerHTML="";
-  const allPast=[...archives].sort((a,b)=>b.date.localeCompare(a.date));
-  if(!allPast.length){
-    list.innerHTML='<div style="font-size:11px;color:#222;padding:12px 0;letter-spacing:.1em;">지난 모임 없음</div>';
-    return;
-  }
-  allPast.forEach(m=>{
-    const status=m.status||[], members=m.members||[];
-    const attCnt=members.filter((_,i)=>status[i]&&(status[i].attend||status[i].late)).length;
-    const lateCnt=members.filter((_,i)=>status[i]&&status[i].late).length;
-    const absCnt=members.filter((_,i)=>status[i]&&status[i].absent).length;
-    const cancelCnt=members.filter((_,i)=>status[i]&&status[i].cancel).length;
-    const dateStr=m.date?m.date.replace(/-/g,"."):"";
-    const typeStr=m.type==="jeongmo"?"정모":"벙";
-    const card=document.createElement("div");
-    card.className="archive-card";
-    card.innerHTML=`<div class="archive-card-left">
-        <div class="archive-card-date">${dateStr} <span style="font-size:10px;color:#555;">${typeStr}</span></div>
-        <div class="archive-card-gym">${m.gym||""}</div>
-        <div class="archive-card-counts">
-          <span class="archive-count" style="color:#c8f542;">출석 ${attCnt}</span>
-          <span class="archive-count" style="color:#ffa500;">지각 ${lateCnt}</span>
-          <span class="archive-count" style="color:#ff4444;">불참 ${absCnt}</span>
-          <span class="archive-count" style="color:#555;">취소 ${cancelCnt}</span>
-        </div>
-      </div>
-      <span style="color:#333;font-size:18px;">›</span>`;
-    card.onclick=()=>openArchiveEdit(m.id);
-    list.appendChild(card);
-  });
-}
-
-window.openArchiveEdit=function(id){
-  const m=archives.find(a=>a.id===id);
-  if(!m) return;
-  currentArchiveEditId=id;
-  const dateStr=m.date?m.date.replace(/-/g,"."):"";
-  const typeStr=m.type==="jeongmo"?"정모":"벙";
-  document.getElementById("archive-modal-title").textContent=`${dateStr} ${typeStr} · ${m.gym||""}`;
-  renderArchiveModalMembers(m);
-  document.getElementById("archive-edit-modal").classList.add("open");
-};
-
-function renderArchiveModalMembers(m){
-  const body=document.getElementById("archive-modal-body");
-  body.innerHTML="";
-  const members=m.members||[], status=m.status||[];
-  members.forEach((name,i)=>{
-    const st=status[i]||{};
-    const card=document.createElement("div");
-    card.className=`mc ${st.absent?"absent":st.cancel?"cancel":st.late?"late":st.attend?"att":""}`;
-    const lateBadge=st.absent?`<span class="mlate-badge absent-badge">불참</span>`:
-      st.cancel?`<span class="mlate-badge" style="color:#ff4444;">취소</span>`:
-      st.late?`<span class="mlate-badge">지각</span>`:"";
-    card.innerHTML=`<div class="mbar"></div>
-      <div class="mnum">${i+1}</div>
-      <div class="mname">${name}</div>
-      ${lateBadge}
-      <button class="mbtn ${st.absent?"absent-on":st.cancel?"cancel-on":st.late?"late-on":st.attend?"att-on":""}" onclick="toggleArchiveAttend('${m.id}',${i})">${st.absent?"❌ 불참":st.cancel?"🚫 취소":st.late?"🕐 지각":st.attend?"✓ 출석":"출석"}</button>
-      <button class="mbtn ${st.pay?"pay-on":""}" onclick="toggleArchivePay('${m.id}',${i})">${st.pay?"✓ 입금":"입금"}</button>`;
-    body.appendChild(card);
-  });
-}
-
-window.toggleArchiveAttend=async function(id,i){
-  const m=archives.find(a=>a.id===id);
-  if(!m) return;
-  const status=[...(m.status||m.members.map(()=>({attend:false,late:false,cancel:false,absent:false,pay:false})))];
-  if(!status[i]) status[i]={attend:false,late:false,cancel:false,absent:false,pay:false};
-  const st=status[i];
-  const base={...st,attend:false,late:false,cancel:false,absent:false};
-  if(!st.attend&&!st.late&&!st.cancel&&!st.absent){status[i]={...base,attend:true};}
-  else if(st.attend){status[i]={...base,late:true};}
-  else if(st.late){status[i]={...base,cancel:true};}
-  else if(st.cancel){status[i]={...base,absent:true};}
-  else{status[i]={...base};}
-  await setDoc(doc(db,"gbd_archive",id),{...m,status});
-};
-
-window.toggleArchivePay=async function(id,i){
-  const m=archives.find(a=>a.id===id);
-  if(!m) return;
-  const status=[...(m.status||m.members.map(()=>({attend:false,late:false,pay:false})))];
-  if(!status[i]) status[i]={pay:false};
-  status[i]={...status[i],pay:!status[i].pay};
-  await setDoc(doc(db,"gbd_archive",id),{...m,status});
-};
-
-window.closeArchiveEdit=function(){
-  document.getElementById("archive-edit-modal").classList.remove("open");
-  currentArchiveEditId=null;
-};
 
 window.openDeductModal=function(){
   // 차감 가능한 멤버 선택 팝업
-  // 현재 모임 + 아카이브 모두 집계
-  const allMeetings=[...meetings,...archives];
   const allMembers=new Set();
-  allMeetings.forEach(m=>(m.members||[]).forEach(n=>allMembers.add(n)));
+  meetings.forEach(m=>(m.members||[]).forEach(n=>allMembers.add(n)));
   const names=[...allMembers].filter(name=>{
     const threeMonthAgo=new Date();
     threeMonthAgo.setMonth(threeMonthAgo.getMonth()-3);
@@ -1195,14 +1027,23 @@ function selectCheckinMeeting(id){
 async function checkIn(i){
   const m=meetings.find(m=>m.id===selectedCheckinMeetingId);
   if(!m) return;
-  const status=[...(m.status||m.members.map(()=>({attend:false,late:false,pay:false})))];
-  const st=status[i]||{};
-  if(st.attend||st.late){alert(m.members[i]+"님은 이미 체크인했어요!");return;}
-  if(!status[i]) status[i]={attend:false,late:false,pay:false};
   const late=isLate(m);
-  if(late){status[i].late=true;status[i].attend=false;}
-  else{status[i].attend=true;status[i].late=false;}
-  await setDoc(doc(db,"gbd_meetings",selectedCheckinMeetingId),{...m,status});
+  const ref=doc(db,"gbd_meetings",selectedCheckinMeetingId);
+  let alreadyDone=false;
+  await runTransaction(db,async t=>{
+    const snap=await t.get(ref);
+    if(!snap.exists()) throw new Error("모임 없음");
+    const data=snap.data();
+    const members=data.members||[];
+    const status=[...(data.status||members.map(()=>({attend:false,late:false,cancel:false,absent:false,pay:false})))];
+    const st=status[i]||{};
+    if(st.attend||st.late){alreadyDone=true;return;}
+    if(!status[i]) status[i]={attend:false,late:false,cancel:false,absent:false,pay:false};
+    if(late){status[i].late=true;status[i].attend=false;}
+    else{status[i].attend=true;status[i].late=false;}
+    t.update(ref,{status});
+  });
+  if(alreadyDone){alert(m.members[i]+"님은 이미 체크인했어요!");return;}
   document.getElementById("done-name").textContent=m.members[i];
   const dateStr=m.date?m.date.replace(/-/g,"."):"";
   document.getElementById("done-meeting").textContent=`${m.type==="jeongmo"?"🏋️ 정모":"⚡ 벙"} · ${dateStr} · ${m.gym||""}`;
@@ -1229,13 +1070,5 @@ window.backToMeetingSelect=function(){
   renderCheckinMeetings();
 };
 </script>
-<!-- 아카이브 수정 모달 -->
-<div id="archive-edit-modal">
-  <div class="modal-header">
-    <button class="modal-cancel" onclick="closeArchiveEdit()">← 닫기</button>
-    <div id="archive-modal-title" style="font-size:13px;font-weight:900;color:#eee;letter-spacing:.05em;flex:1;padding:0 12px;"></div>
-  </div>
-  <div id="archive-modal-body" style="padding:8px 16px 80px;display:flex;flex-direction:column;gap:5px;"></div>
-</div>
 </body>
 </html>
