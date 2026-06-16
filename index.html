@@ -681,12 +681,14 @@ window.copyResult=function(){
   const attended=members.filter((_,i)=>status[i]&&(status[i].attend||status[i].late));
   // 입금자
   const paid=members.filter((_,i)=>status[i]&&status[i].pay);
-  // 미입금자 = 참가자 중 입금 안 한 사람
-  const unpaid=attended.filter(n=>!paid.includes(n));
-  // 취소자
   const canceled=members.filter((_,i)=>status[i]&&status[i].cancel);
-  // 불참자
   const absent=members.filter((_,i)=>status[i]&&status[i].absent);
+  // 미입금자 = 취소자 제외하고 입금 안 한 사람 (불참자도 미입금이면 포함)
+  const unpaid=members.filter((_,i)=>{
+    const st=status[i]||{};
+    if(st.cancel) return false; // 취소자만 제외
+    return !st.pay; // 입금 안 한 사람
+  });
   const typeStr=m.type==="jeongmo"?"정모":"벙";
   const dateStr=m.date?m.date.replace(/-/g,"."):"";
   const text=`📋 근방단 ${typeStr} 참가 및 입금 현황 (${dateStr})
