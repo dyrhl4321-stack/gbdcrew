@@ -421,12 +421,13 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const meetingsRef = collection(db, "gbd_meetings");
+const archiveRef = collection(db, "gbd_archive");
 const memberStatsRef = doc(db, "gbd_stats", "members");
 
 const ADMIN_PW = "5252";
 const LATE_MINUTES = 5; // 지각 기준: 시작 후 5분
 
-let meetings=[], memberStats={}, currentMeetingId=null;
+let meetings=[], archives=[], memberStats={}, currentMeetingId=null;
 let editMeetingId=null, selectedType="jeongmo", editMembers=[];
 let selectedCheckinMeetingId=null;
 const params = new URLSearchParams(window.location.search);
@@ -506,6 +507,13 @@ onSnapshot(q, snap=>{
     }
   }
 },()=>setSyncBar("error","● 연결 오류"));
+
+// 아카이브(지난 모임) 실시간 리스닝 — 통계에 과거 데이터 합산
+const archiveQ = query(archiveRef, orderBy("date","asc"));
+onSnapshot(archiveQ, snap=>{
+  archives = snap.docs.map(d=>({id:d.id,...d.data()}));
+  updateCurrentPage();
+});
 
 // 멤버 통계 리스닝
 onSnapshot(memberStatsRef, snap=>{
@@ -738,15 +746,18 @@ function renderStatsPage(){
   const now=new Date();
   document.getElementById("stats-period").textContent=`${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,"0")} 기준`;
 
+  // 현재 모임 + 아카이브(지난 모임) 모두 집계
+  const allMeetings=[...meetings,...archives];
+
   // 전체 멤버 수집
   const allMembers=new Set();
-  meetings.forEach(m=>(m.members||[]).forEach(n=>allMembers.add(n)));
+  allMeetings.forEach(m=>(m.members||[]).forEach(n=>allMembers.add(n)));
 
   const computed={};
   allMembers.forEach(name=>{ computed[name]={attend:0,late:0,absent:0}; });
 
   const today=new Date(); today.setHours(0,0,0,0);
-  meetings.forEach(m=>{
+  allMeetings.forEach(m=>{
     if(!m.date) return;
     const md=new Date(m.date); md.setHours(0,0,0,0);
     if(md>today) return;
@@ -771,7 +782,7 @@ function renderStatsPage(){
     computed[name].lateDisplay=realLate;
     computed[name].warning=Math.floor(realLate/2)+computed[name].absent;
     let lateIn3mo=0;
-    meetings.forEach(m=>{
+    allMeetings.forEach(m=>{
       if(!m.date) return;
       const md=new Date(m.date); md.setHours(0,0,0,0);
       if(md>=threeMonthAgo&&md<=today){
@@ -802,7 +813,7 @@ function renderStatsPage(){
   const gongeumList=document.getElementById("gongeum-list");
   gongeumList.innerHTML="";
   let totalGongeum=0;
-  meetings.forEach(m=>{
+  allMeetings.forEach(m=>{
     if(!m.date||!m.fee) return;
     const md=new Date(m.date); md.setHours(0,0,0,0);
     if(md>today) return;
