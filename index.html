@@ -18,7 +18,10 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
 
 /* 체크인 비밀번호 입력 */
 #password-section{width:100%;display:flex;flex-direction:column;align-items:center;}
-.ci-pw-input{width:100%;background:#141414;border:1px solid #222;color:#e8e8e8;padding:14px;font-size:18px;font-family:inherit;outline:none;text-align:center;letter-spacing:.2em;}
+.pin-wrap{display:flex;gap:16px;justify-content:center;margin:6px 0 2px;}
+.pin-box{width:48px;height:62px;background:transparent;border:none;border-bottom:3px solid #2c2c2c;color:#fff;font-size:32px;font-weight:900;text-align:center;font-family:inherit;outline:none;caret-color:#c8f542;transition:border-color .2s;padding:0;}
+.pin-box:focus{border-bottom-color:#c8f542;}
+.pin-box.filled{border-bottom-color:#c8f542;}
 .ci-pw-btn{width:100%;padding:14px;background:#c8f542;border:none;color:#000;font-size:13px;font-weight:900;letter-spacing:.2em;cursor:pointer;font-family:inherit;margin-top:8px;}
 .ci-pw-err{font-size:11px;color:#ff4444;letter-spacing:.1em;min-height:16px;margin-top:6px;}
 
@@ -273,9 +276,9 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
       <div style="font-size:9px;color:#333;letter-spacing:.08em;">불참·취소자 발생 시 공금으로 자동 적립</div>
     </div>
     <div>
-      <div class="m-label">— 출석 비밀번호 (선택)</div>
-      <input class="m-input" id="m-password" placeholder="미설정 시 비밀번호 없이 입장" maxlength="30" autocomplete="off">
-      <div style="font-size:9px;color:#333;margin-top:6px;letter-spacing:.08em;">🔒 QR 접속자가 이 비밀번호를 맞춰야 출석 가능 (비워두면 바로 입장)</div>
+      <div class="m-label">— 출석 비밀번호 (선택 · 숫자 4자리)</div>
+      <input class="m-input" id="m-password" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="예: 1234 (비우면 비밀번호 없음)" autocomplete="off" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,4)">
+      <div style="font-size:9px;color:#333;margin-top:6px;letter-spacing:.08em;">🔒 QR 접속자가 이 4자리를 맞춰야 출석 가능 (비워두면 바로 입장)</div>
     </div>
     <div>
       <div class="m-label">— 참석자 명단</div>
@@ -426,8 +429,14 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
   </div>
   <div id="password-section" style="display:none;width:100%">
     <div id="ci-pw-tag" style="background:#141414;border:1px solid #1e1e1e;padding:8px 16px;font-size:11px;color:#555;width:100%;text-align:center;"></div>
-    <div class="ci-sub" style="margin:16px 0 10px">🔒 출석 비밀번호를 입력하세요</div>
-    <input id="checkin-pw-input" class="ci-pw-input" inputmode="text" autocomplete="off" placeholder="비밀번호" onkeydown="if(event.key==='Enter')submitCheckinPw()">
+    <div class="ci-sub" style="margin:18px 0 2px;font-size:13px;color:#888;">🔒 출석 비밀번호</div>
+    <div class="ci-sub" style="font-size:10px;color:#444;margin-bottom:8px;letter-spacing:.12em;">숫자 4자리를 입력하세요</div>
+    <div id="pin-wrap" class="pin-wrap">
+      <input class="pin-box" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="off" aria-label="비밀번호 1자리">
+      <input class="pin-box" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="off" aria-label="비밀번호 2자리">
+      <input class="pin-box" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="off" aria-label="비밀번호 3자리">
+      <input class="pin-box" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="off" aria-label="비밀번호 4자리">
+    </div>
     <div id="checkin-pw-err" class="ci-pw-err"></div>
     <button class="ci-pw-btn" onclick="submitCheckinPw()">입장</button>
     <button onclick="backToMeetingSelect()" style="margin-top:12px;background:transparent;border:1px solid #1e1e1e;color:#333;font-size:11px;padding:11px 20px;cursor:pointer;font-family:inherit;width:100%;">← 모임 다시 선택</button>
@@ -1144,6 +1153,7 @@ window.saveMeeting=async function(){
   if(!date||!gym||!members.length){alert("날짜, 헬스장, 인원을 모두 입력해주세요!");return;}
   const fee=parseInt(document.getElementById("m-fee").value)||0;
   const password=document.getElementById("m-password").value.trim();
+  if(password && !/^\d{4}$/.test(password)){alert("출석 비밀번호는 숫자 4자리로 설정하거나 비워주세요!");return;}
   const id=editMeetingId||`meeting_${Date.now()}`;
   const existing=editMeetingId?meetings.find(m=>m.id===editMeetingId):null;
   const status=existing?(existing.status||members.map(()=>({attend:false,late:false,cancel:false,pay:false}))):members.map(()=>({attend:false,late:false,cancel:false,pay:false}));
@@ -1210,27 +1220,56 @@ function selectCheckinMeeting(id){
     const dateStr=m.date?m.date.replace(/-/g,"."):"";
     const typeLabel=m.type==="jeongmo"?"🏋️ 정모":"⚡ 벙";
     document.getElementById("ci-pw-tag").textContent=`${typeLabel} · ${dateStr} · ${m.gym||""}`;
-    document.getElementById("checkin-pw-input").value="";
+    resetPin();
     document.getElementById("checkin-pw-err").textContent="";
     document.getElementById("meeting-select-section").style.display="none";
     document.getElementById("name-select-section").style.display="none";
     document.getElementById("password-section").style.display="flex";
-    setTimeout(()=>document.getElementById("checkin-pw-input").focus(),100);
+    setTimeout(()=>{const f=document.querySelector("#pin-wrap .pin-box");if(f)f.focus();},120);
     return;
   }
   showCheckinNames(id);
 }
 
-window.submitCheckinPw=function(){
+// ── 체크인 PIN(숫자 4자리) 입력 ──
+function getPin(){
+  return [...document.querySelectorAll("#pin-wrap .pin-box")].map(b=>b.value).join("");
+}
+function resetPin(){
+  document.querySelectorAll("#pin-wrap .pin-box").forEach(b=>{b.value="";b.classList.remove("filled");});
+}
+function setupPinInputs(){
+  const boxes=[...document.querySelectorAll("#pin-wrap .pin-box")];
+  boxes.forEach((box,idx)=>{
+    box.addEventListener("input",()=>{
+      box.value=box.value.replace(/[^0-9]/g,"").slice(0,1);
+      box.classList.toggle("filled",!!box.value);
+      if(box.value && idx<boxes.length-1) boxes[idx+1].focus();
+      if(getPin().length===4) setTimeout(submitCheckinPw,150); // 4자리 다 채우면 자동 판정
+    });
+    box.addEventListener("keydown",e=>{
+      if(e.key==="Backspace" && !box.value && idx>0){ boxes[idx-1].focus(); }
+      else if(e.key==="Enter"){ submitCheckinPw(); }
+    });
+  });
+}
+setupPinInputs();
+
+function submitCheckinPw(){
   const m=meetings.find(m=>m.id===selectedCheckinMeetingId);
   if(!m) return;
-  const val=document.getElementById("checkin-pw-input").value.trim();
+  const val=getPin();
+  if(val.length<4){
+    document.getElementById("checkin-pw-err").textContent="숫자 4자리를 모두 입력하세요";
+    return;
+  }
   if(val===(m.password||"").trim()){
     showCheckinNames(m.id);
   }else{
     showPage("page-blocked");
   }
-};
+}
+window.submitCheckinPw=submitCheckinPw;
 
 function showCheckinNames(id){
   selectedCheckinMeetingId=id;
