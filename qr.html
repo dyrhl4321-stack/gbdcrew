@@ -2,47 +2,107 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>근방단 QR코드</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sans KR",sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;}
-.card{background:#111;border:1px solid #222;padding:40px 32px;display:flex;flex-direction:column;align-items:center;gap:20px;max-width:360px;width:100%;}
-.title{font-size:22px;font-weight:900;letter-spacing:.3em;color:#eee;}
-.sub{font-size:12px;color:#c8f542;letter-spacing:.15em;font-weight:700;}
-#qrcode{background:#fff;padding:12px;border-radius:4px;}
-.desc{font-size:12px;color:#555;letter-spacing:.08em;text-align:center;line-height:1.8;}
-.desc span{color:#c8f542;}
-.print-btn{padding:13px 32px;background:#c8f542;border:none;color:#000;font-size:12px;font-weight:900;letter-spacing:.2em;cursor:pointer;font-family:inherit;margin-top:8px;}
-.url{font-size:9px;color:#333;letter-spacing:.05em;word-break:break-all;text-align:center;}
+body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sans KR",sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
+
+.poster{background:#111;border:1px solid #222;padding:34px 30px 30px;display:flex;flex-direction:column;align-items:center;gap:22px;max-width:430px;width:100%;}
+
+/* 브랜드 */
+.brand{text-align:center;}
+.brand-mark{font-size:24px;font-weight:900;letter-spacing:.34em;color:#fff;text-indent:.34em;}
+.brand-sub{font-size:12px;font-weight:700;letter-spacing:.22em;color:#c8f542;margin-top:6px;text-indent:.22em;}
+
+/* 메인 출석 QR (히어로) */
+.main-qr-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;}
+.qr-box{background:#fff;padding:14px;border-radius:6px;line-height:0;}
+.qr-box img,.qr-box canvas{display:block;max-width:100%;height:auto;}
+.main-cta{font-size:13px;letter-spacing:.06em;color:#888;}
+.main-cta b{color:#c8f542;font-weight:900;}
+
+/* 인스타 궁금증 존 */
+.insta-zone{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;color:#c8f542;margin-top:2px;padding-top:18px;border-top:1px solid #1c1c1c;}
+.curiosity{font-family:"Nanum Pen Script","Apple SD Gothic Neo",sans-serif;line-height:1.05;text-align:right;flex-shrink:0;}
+.curio-1{display:block;font-size:23px;color:#777;}
+.curio-2{display:block;font-size:30px;font-weight:400;color:#c8f542;}
+.arrow{width:62px;height:58px;flex-shrink:0;color:#c8f542;}
+
+.insta-card{display:flex;flex-direction:column;align-items:center;gap:7px;flex-shrink:0;}
+.qr-box-sm{background:#fff;padding:8px;border-radius:5px;line-height:0;}
+.qr-box-sm img,.qr-box-sm canvas{display:block;max-width:100%;height:auto;}
+.insta-handle{font-size:11px;font-weight:900;letter-spacing:.04em;color:#eee;}
+.insta-label{font-size:9px;letter-spacing:.12em;color:#555;}
+
+.print-btn{padding:13px 34px;background:#c8f542;border:none;color:#000;font-size:12px;font-weight:900;letter-spacing:.2em;cursor:pointer;font-family:"Apple SD Gothic Neo","Noto Sans KR",sans-serif;margin-top:6px;}
+
+/* 인쇄: 흰 배경 + 검정, 스캔 최적화 */
 @media print{
-  body{background:#fff;}
-  .card{border:none;}
+  body{background:#fff;padding:0;}
+  .poster{border:none;background:#fff;max-width:none;padding:28px;gap:26px;}
+  .brand-mark{color:#000;}
+  .brand-sub{color:#222;}
+  .main-cta{color:#333;}
+  .main-cta b{color:#000;}
+  .insta-zone{color:#000;border-top-color:#ccc;}
+  .curio-1{color:#444;}
+  .curio-2{color:#000;}
+  .arrow{color:#000;}
+  .insta-handle{color:#000;}
+  .insta-label{color:#444;}
   .print-btn{display:none;}
-  .title{color:#000;}
-  .sub{color:#555;}
-  .desc{color:#333;}
-  .desc span{color:#000;font-weight:700;}
 }
 </style>
 </head>
 <body>
-<div class="card">
-  <div class="title">GBD CREW</div>
-  <div class="sub">근방단 출석체크</div>
-  <div id="qrcode"></div>
-  <div class="desc">
-    📱 카메라로 QR을 스캔하세요<br>
-    본인 이름 선택 → <span>출석 완료!</span>
+<div class="poster">
+  <div class="brand">
+    <div class="brand-mark">GBD CREW</div>
+    <div class="brand-sub">근방단 출석체크</div>
   </div>
-  <div class="url">dyrhl4321-stack.github.io/gbdcrew?mode=checkin</div>
+
+  <div class="main-qr-wrap">
+    <div id="qrcode-main" class="qr-box"></div>
+    <div class="main-cta">📱 스캔 → 이름 선택 → <b>출석 완료</b></div>
+  </div>
+
+  <div class="insta-zone">
+    <div class="curiosity">
+      <span class="curio-1">근방단은</span>
+      <span class="curio-2">뭐 하는 모임이게?</span>
+    </div>
+    <svg class="arrow" viewBox="0 0 62 58" fill="none" aria-hidden="true">
+      <path d="M4 10 C 30 2, 52 14, 54 42" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+      <path d="M54 44 L 44 35 M54 44 L 56 31" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="insta-card">
+      <div id="qrcode-insta" class="qr-box-sm"></div>
+      <div class="insta-handle">@gbd_project</div>
+      <div class="insta-label">인스타 구경하기</div>
+    </div>
+  </div>
+
   <button class="print-btn" onclick="window.print()">🖨️ 인쇄하기</button>
 </div>
+
 <script>
-new QRCode(document.getElementById("qrcode"), {
+new QRCode(document.getElementById("qrcode-main"), {
   text: "https://dyrhl4321-stack.github.io/gbdcrew?mode=checkin",
-  width: 240,
-  height: 240,
+  width: 340,
+  height: 340,
+  colorDark: "#000000",
+  colorLight: "#ffffff",
+  correctLevel: QRCode.CorrectLevel.H
+});
+new QRCode(document.getElementById("qrcode-insta"), {
+  text: "https://instagram.com/gbd_project",
+  width: 110,
+  height: 110,
   colorDark: "#000000",
   colorLight: "#ffffff",
   correctLevel: QRCode.CorrectLevel.H
