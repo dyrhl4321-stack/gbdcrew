@@ -7,8 +7,20 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sans KR",sans-serif;min-height:100vh;max-width:480px;margin:0 auto;}
-#page-main,#page-checkin,#page-done,#page-login,#page-stats{display:none;flex-direction:column;min-height:100vh;}
-#page-main.active,#page-checkin.active,#page-done.active,#page-login.active,#page-stats.active{display:flex;}
+#page-main,#page-checkin,#page-done,#page-login,#page-stats,#page-blocked{display:none;flex-direction:column;min-height:100vh;}
+#page-main.active,#page-checkin.active,#page-done.active,#page-login.active,#page-stats.active,#page-blocked.active{display:flex;}
+
+/* 비밀번호 오답 차단 */
+#page-blocked{align-items:center;justify-content:center;gap:28px;padding:40px 24px;text-align:center;background:#0a0a0a;}
+.blocked-emoji{font-size:84px;line-height:1;}
+.blocked-msg{font-size:34px;font-weight:900;color:#c8f542;line-height:1.45;letter-spacing:.04em;}
+.blocked-sub{font-size:12px;color:#333;letter-spacing:.1em;}
+
+/* 체크인 비밀번호 입력 */
+#password-section{width:100%;display:flex;flex-direction:column;align-items:center;}
+.ci-pw-input{width:100%;background:#141414;border:1px solid #222;color:#e8e8e8;padding:14px;font-size:18px;font-family:inherit;outline:none;text-align:center;letter-spacing:.2em;}
+.ci-pw-btn{width:100%;padding:14px;background:#c8f542;border:none;color:#000;font-size:13px;font-weight:900;letter-spacing:.2em;cursor:pointer;font-family:inherit;margin-top:8px;}
+.ci-pw-err{font-size:11px;color:#ff4444;letter-spacing:.1em;min-height:16px;margin-top:6px;}
 
 /* 로그인 */
 #page-login{align-items:center;justify-content:center;gap:20px;padding:40px 24px;}
@@ -261,6 +273,11 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
       <div style="font-size:9px;color:#333;letter-spacing:.08em;">불참·취소자 발생 시 공금으로 자동 적립</div>
     </div>
     <div>
+      <div class="m-label">— 출석 비밀번호 (선택)</div>
+      <input class="m-input" id="m-password" placeholder="미설정 시 비밀번호 없이 입장" maxlength="30" autocomplete="off">
+      <div style="font-size:9px;color:#333;margin-top:6px;letter-spacing:.08em;">🔒 QR 접속자가 이 비밀번호를 맞춰야 출석 가능 (비워두면 바로 입장)</div>
+    </div>
+    <div>
       <div class="m-label">— 참석자 명단</div>
       <div class="member-add-row">
         <input class="member-add-inp" id="new-member-inp" placeholder="이름 입력 후 + 버튼" onkeydown="if(event.key==='Enter')addMemberToList()">
@@ -407,6 +424,14 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
     <div id="name-grid"></div>
     <button onclick="backToMeetingSelect()" style="margin-top:14px;background:transparent;border:1px solid #1e1e1e;color:#333;font-size:11px;padding:11px 20px;cursor:pointer;font-family:inherit;width:100%;">← 모임 다시 선택</button>
   </div>
+  <div id="password-section" style="display:none;width:100%">
+    <div id="ci-pw-tag" style="background:#141414;border:1px solid #1e1e1e;padding:8px 16px;font-size:11px;color:#555;width:100%;text-align:center;"></div>
+    <div class="ci-sub" style="margin:16px 0 10px">🔒 출석 비밀번호를 입력하세요</div>
+    <input id="checkin-pw-input" class="ci-pw-input" inputmode="text" autocomplete="off" placeholder="비밀번호" onkeydown="if(event.key==='Enter')submitCheckinPw()">
+    <div id="checkin-pw-err" class="ci-pw-err"></div>
+    <button class="ci-pw-btn" onclick="submitCheckinPw()">입장</button>
+    <button onclick="backToMeetingSelect()" style="margin-top:12px;background:transparent;border:1px solid #1e1e1e;color:#333;font-size:11px;padding:11px 20px;cursor:pointer;font-family:inherit;width:100%;">← 모임 다시 선택</button>
+  </div>
 </div>
 
 <!-- 출석 완료 -->
@@ -418,6 +443,13 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
   <div id="done-msg" class="on-time">출석 완료!</div>
   <div id="done-sub">오늘도 근방단 화이팅 💪</div>
   <button id="done-back" onclick="backToMeetingSelect()">← 돌아가기</button>
+</div>
+
+<!-- 비밀번호 오답 차단 -->
+<div id="page-blocked">
+  <div class="blocked-emoji">🤡</div>
+  <div class="blocked-msg">민수야<br>이것도 따라해봐<br>ㅋㅋㅋㅋ</div>
+  <div class="blocked-sub">접근이 차단되었습니다</div>
 </div>
 
 <script type="module">
@@ -449,7 +481,7 @@ const params = new URLSearchParams(window.location.search);
 const mode = params.get("mode");
 
 function showPage(id){
-  ["page-main","page-checkin","page-done","page-login","page-stats"].forEach(p=>document.getElementById(p).classList.remove("active"));
+  ["page-main","page-checkin","page-done","page-login","page-stats","page-blocked"].forEach(p=>document.getElementById(p).classList.remove("active"));
   document.getElementById(id).classList.add("active");
 }
 
@@ -529,8 +561,16 @@ onSnapshot(q, snap=>{
   meetings=snap.docs.map(d=>({id:d.id,...d.data()}));
   setSyncBar("synced","● 실시간 연동 중");
   if(mode==="checkin"){
-    showPage("page-checkin");
-    renderCheckinMeetings();
+    // 사용자가 비밀번호 입력·이름 선택·완료·차단 화면 등 진행 중이면 방해하지 않음 (메모리 meetings만 갱신)
+    const inFlow =
+      document.getElementById("page-blocked").classList.contains("active") ||
+      document.getElementById("page-done").classList.contains("active") ||
+      document.getElementById("password-section").style.display==="flex" ||
+      document.getElementById("name-select-section").style.display==="block";
+    if(!inFlow){
+      showPage("page-checkin");
+      renderCheckinMeetings();
+    }
   } else {
     if(sessionStorage.getItem("gbd_admin")==="ok"){
       if(currentActivePage==="login"){
@@ -1067,6 +1107,8 @@ window.openAddMeeting=function(){
   document.getElementById("m-date").value=new Date().toISOString().slice(0,10);
   document.getElementById("m-time").value="";
   document.getElementById("m-gym").value="";
+  document.getElementById("m-fee").value="";
+  document.getElementById("m-password").value="";
   selectType("jeongmo");renderMemberEditList();
   document.getElementById("meeting-modal").classList.add("open");
 };
@@ -1081,6 +1123,7 @@ window.openEditMeeting=function(){
   document.getElementById("m-time").value=m.startTime||"";
   document.getElementById("m-gym").value=m.gym||"";
   document.getElementById("m-fee").value=m.fee||15000;
+  document.getElementById("m-password").value=m.password||"";
   selectType(selectedType);renderMemberEditList();
   document.getElementById("meeting-modal").classList.add("open");
 };
@@ -1100,10 +1143,11 @@ window.saveMeeting=async function(){
   const members=editMembers.filter(m=>m.trim());
   if(!date||!gym||!members.length){alert("날짜, 헬스장, 인원을 모두 입력해주세요!");return;}
   const fee=parseInt(document.getElementById("m-fee").value)||0;
+  const password=document.getElementById("m-password").value.trim();
   const id=editMeetingId||`meeting_${Date.now()}`;
   const existing=editMeetingId?meetings.find(m=>m.id===editMeetingId):null;
   const status=existing?(existing.status||members.map(()=>({attend:false,late:false,cancel:false,pay:false}))):members.map(()=>({attend:false,late:false,cancel:false,pay:false}));
-  await setDoc(doc(db,"gbd_meetings",id),{type:selectedType,date,startTime,gym,fee,members,status});
+  await setDoc(doc(db,"gbd_meetings",id),{type:selectedType,date,startTime,gym,fee,members,status,password});
   currentMeetingId=id;window.closeMeetingModal();
 };
 
@@ -1131,6 +1175,7 @@ function renderCheckinMeetings(){
   wrap.innerHTML="";
   document.getElementById("meeting-select-section").style.display="block";
   document.getElementById("name-select-section").style.display="none";
+  document.getElementById("password-section").style.display="none";
   if(!meetings.length){
     wrap.innerHTML='<div style="text-align:center;color:#2a2a2a;font-size:12px;padding:40px 0;">현재 모임이 없어요</div>';
     return;
@@ -1160,11 +1205,43 @@ function selectCheckinMeeting(id){
   selectedCheckinMeetingId=id;
   const m=meetings.find(m=>m.id===id);
   if(!m) return;
+  // 비밀번호가 설정된 모임이면 비밀번호 입력 화면 먼저 노출
+  if(m.password && m.password.trim()){
+    const dateStr=m.date?m.date.replace(/-/g,"."):"";
+    const typeLabel=m.type==="jeongmo"?"🏋️ 정모":"⚡ 벙";
+    document.getElementById("ci-pw-tag").textContent=`${typeLabel} · ${dateStr} · ${m.gym||""}`;
+    document.getElementById("checkin-pw-input").value="";
+    document.getElementById("checkin-pw-err").textContent="";
+    document.getElementById("meeting-select-section").style.display="none";
+    document.getElementById("name-select-section").style.display="none";
+    document.getElementById("password-section").style.display="flex";
+    setTimeout(()=>document.getElementById("checkin-pw-input").focus(),100);
+    return;
+  }
+  showCheckinNames(id);
+}
+
+window.submitCheckinPw=function(){
+  const m=meetings.find(m=>m.id===selectedCheckinMeetingId);
+  if(!m) return;
+  const val=document.getElementById("checkin-pw-input").value.trim();
+  if(val===(m.password||"").trim()){
+    showCheckinNames(m.id);
+  }else{
+    showPage("page-blocked");
+  }
+};
+
+function showCheckinNames(id){
+  selectedCheckinMeetingId=id;
+  const m=meetings.find(m=>m.id===id);
+  if(!m) return;
   const dateStr=m.date?m.date.replace(/-/g,"."):"";
   const typeLabel=m.type==="jeongmo"?"🏋️ 정모":"⚡ 벙";
   const lateNow=isLate(m);
   document.getElementById("ci-meeting-tag").textContent=`${typeLabel} · ${dateStr} · ${m.gym||""}${lateNow?" 🕐 지각시간":""}`;
   document.getElementById("meeting-select-section").style.display="none";
+  document.getElementById("password-section").style.display="none";
   document.getElementById("name-select-section").style.display="block";
   const grid=document.getElementById("name-grid");
   grid.innerHTML="";
