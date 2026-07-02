@@ -200,18 +200,26 @@ function renderMeeting() {
     else if (st.attend) att++;
   });
 
+  // 게스트: 전체·출석에 포함(지각/취소/불참은 근방단 전용 로직이라 미포함)
+  const gRaw = m.guests || [];
+  const gNames = gRaw.map(g => typeof g === 'string' ? g : (g && g.name) || '');
+  const gStatArr = gNames.map((n,i) => (m.guestStatus && m.guestStatus[i]) ? { attend: !!m.guestStatus[i].attend, late: !!m.guestStatus[i].late } : { attend:false, late:false });
+  let gTotal=0, gAtt=0;
+  gNames.forEach((n,i)=>{ if(n && n.trim()){ gTotal++; if(gStatArr[i] && (gStatArr[i].attend||gStatArr[i].late)) gAtt++; } });
+
   document.getElementById('summary').style.display = 'flex';
-  document.getElementById('s-att').textContent = att;
+  document.getElementById('s-att').textContent = att + gAtt;
   document.getElementById('s-late').textContent = late;
   document.getElementById('s-cancel').textContent = cancel;
   document.getElementById('s-absent').textContent = absent;
-  document.getElementById('s-total').textContent = members.length;
+  document.getElementById('s-total').textContent = members.length + gTotal;
 
-  const checked = att + late;
-  document.getElementById('prog-bar').style.width = members.length ? Math.round(checked / members.length * 100) + '%' : '0%';
+  const denom = members.length + gTotal;
+  const checked = att + late + gAtt;
+  document.getElementById('prog-bar').style.width = denom ? Math.round(checked / denom * 100) + '%' : '0%';
 
   const list = document.getElementById('member-list');
-  list.innerHTML = members.map((name, i) => {
+  const membersHtml = members.map((name, i) => {
     const st = status[i] || {};
     let cls = 'mc', statusTxt = '미체크', statusCls = 'status-none';
     if (st.absent)       { cls += ' absent'; statusTxt = '❌ 불참'; statusCls = 'status-absent'; }
@@ -225,6 +233,23 @@ function renderMeeting() {
       <span class="mstatus ${statusCls}">${statusTxt}</span>
     </div>`;
   }).join('');
+  const grp = (m.guestGroup||'').trim();
+  const gShown = gNames.map((n,i)=>({name:n,st:gStatArr[i]||{}})).filter(x=>x.name&&x.name.trim());
+  let guestHtml = '';
+  if (gShown.length) {
+    guestHtml = `<div style="font-size:11px;color:#ffa500;letter-spacing:.08em;margin:14px 0 8px;">— ${grp?grp+' ':''}게스트 ${gShown.length}명</div>` +
+      gShown.map(x => {
+        let statusTxt='미체크', statusCls='status-none';
+        if (x.st.late) { statusTxt='🕐 지각'; statusCls='status-late'; }
+        else if (x.st.attend) { statusTxt='✓ 출석'; statusCls='status-att'; }
+        return `<div class="mc">
+      <div class="mbar"></div>
+      <span class="mname">${x.name} <span style="color:#ffa500;font-size:9px;border:1px solid #ffa500;border-radius:4px;padding:0 4px;">게스트</span></span>
+      <span class="mstatus ${statusCls}">${statusTxt}</span>
+    </div>`;
+      }).join('');
+  }
+  list.innerHTML = membersHtml + guestHtml;
 }
 </script>
 </body>

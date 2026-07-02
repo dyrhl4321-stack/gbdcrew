@@ -512,8 +512,7 @@ function guestStat(m){
   const raw=(m&&m.guests)||[], st=(m&&m.guestStatus)||[];
   return raw.map((g,i)=>{
     if(st[i]) return {attend:!!st[i].attend, late:!!st[i].late};
-    if(g&&typeof g==='object') return {attend: g.attend!==false && !g.late, late:!!g.late}; // 구버전=체크인된 상태
-    return {attend:false, late:false};
+    return {attend:false, late:false}; // 디폴트=미출석 (구버전 객체도 미출석으로, 관리자가 로스터만 등록)
   });
 }
 let selectedCheckinMeetingId=null;
@@ -739,11 +738,16 @@ function renderCurrentMeeting(){
   const unchecked=members.length-(att+late+cancel+absent);
   const fee=m.fee||0;
   const gongeum=(absent+cancel)*fee;
-  document.getElementById("s-total").textContent=members.length;
-  document.getElementById("s-att").textContent=att;
+  // 게스트: total·출석에만 포함(지각/입금/공금은 근방단 전용 로직이라 미포함)
+  const gNames=guestRoster(m), gSt=guestStat(m);
+  let gTotal=0, gAtt=0;
+  gNames.forEach((n,i)=>{ if(n&&n.trim()){ gTotal++; if(gSt[i]&&(gSt[i].attend||gSt[i].late)) gAtt++; } });
+  const denom=members.length+gTotal;
+  document.getElementById("s-total").textContent=denom;
+  document.getElementById("s-att").textContent=att+gAtt;
   document.getElementById("s-late").textContent=late;
   document.getElementById("s-pay").textContent=pay;
-  document.getElementById("prog-bar").style.width=members.length?Math.round((att+late)/members.length*100)+"%":"0%";
+  document.getElementById("prog-bar").style.width=denom?Math.round((att+late+gAtt)/denom*100)+"%":"0%";
   // 공금 표시
   const geEl=document.getElementById("gongeum-display");
   if(geEl) geEl.textContent=fee>0?`💰 공금 +${gongeum.toLocaleString()}원 (불참${absent}+취소${cancel})×${fee.toLocaleString()}원`:"";
