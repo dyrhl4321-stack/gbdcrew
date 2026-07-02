@@ -525,6 +525,7 @@ async function autoArchiveCheck(){
 
 // ── 자동 불참 처리 ──
 async function autoAbsentCheck(){
+  if(mode==="checkin") return; // 멤버 QR 체크인 화면에선 자동불참 실행 안 함(지각을 덮어쓰던 버그 방지)
   const now=new Date();
   for(const m of meetings){
     if(!m.date||!m.startTime) continue;
@@ -532,20 +533,27 @@ async function autoAbsentCheck(){
     const md=new Date(m.date);
     const autoAbsentTime=new Date(md.getFullYear(),md.getMonth(),md.getDate(),h,min+60); // 시작+1시간
     if(now<autoAbsentTime) continue; // 아직 자동불참 시간 안됨
-    const members=m.members||[];
-    const status=[...(m.status||members.map(()=>({attend:false,late:false,cancel:false,absent:false,pay:false})))];
-    let changed=false;
-    members.forEach((_,i)=>{
-      const st=status[i]||{};
-      // 미체크 상태인 경우만 자동 불참 처리
-      if(!st.attend&&!st.late&&!st.cancel&&!st.absent){
-        status[i]={...st,absent:true};
-        changed=true;
-      }
-    });
-    if(changed){
-      await setDoc(doc(db,"gbd_meetings",m.id),{...m,status},);
-    }
+    const ref=doc(db,"gbd_meetings",m.id);
+    try{
+      // 로컬 상태 덮어쓰기(setDoc) 대신 트랜잭션으로 최신 문서를 다시 읽어
+      // 진짜 '미체크'만 불참 처리 → 지각/출석/취소는 그대로 보존(덮어쓰기 레이스 방지)
+      await runTransaction(db,async t=>{
+        const snap=await t.get(ref);
+        if(!snap.exists()) return;
+        const data=snap.data();
+        const members=data.members||[];
+        const status=[...(data.status||members.map(()=>({attend:false,late:false,cancel:false,absent:false,pay:false})))];
+        let changed=false;
+        members.forEach((_,i)=>{
+          const st=status[i]||{};
+          if(!st.attend&&!st.late&&!st.cancel&&!st.absent){ // 미체크만
+            status[i]={...st,absent:true};
+            changed=true;
+          }
+        });
+        if(changed) t.update(ref,{status});
+      });
+    }catch(e){ console.warn("autoAbsentCheck tx 실패:",e); }
   }
 }
 
