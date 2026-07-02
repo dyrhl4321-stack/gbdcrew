@@ -346,6 +346,7 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
     <div id="sync-bar">● 연결 중...</div>
     <div id="sec-label">— MEMBERS</div>
     <div id="member-list"></div>
+    <div id="guest-list-wrap" style="display:none;margin-top:14px"></div>
   </div>
   <div id="bottom" style="display:none;">
     <button id="reset-btn" onclick="resetAll()">초기화</button>
@@ -425,7 +426,8 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
     <div id="ci-meeting-tag"></div>
     <div class="ci-sub" style="margin:12px 0 10px">본인 이름을 선택하세요 👇</div>
     <div id="name-grid"></div>
-    <button onclick="backToMeetingSelect()" style="margin-top:14px;background:transparent;border:1px solid #1e1e1e;color:#333;font-size:11px;padding:11px 20px;cursor:pointer;font-family:inherit;width:100%;">← 모임 다시 선택</button>
+    <button onclick="showGuestCheckin()" style="margin-top:12px;background:transparent;border:1px dashed #333;color:#ffa500;font-size:12px;padding:11px 20px;cursor:pointer;font-family:inherit;width:100%;">👋 서헬모 게스트세요? 게스트로 출석 →</button>
+    <button onclick="backToMeetingSelect()" style="margin-top:10px;background:transparent;border:1px solid #1e1e1e;color:#333;font-size:11px;padding:11px 20px;cursor:pointer;font-family:inherit;width:100%;">← 모임 다시 선택</button>
   </div>
   <div id="password-section" style="display:none;width:100%">
     <div id="ci-pw-tag" style="background:#141414;border:1px solid #1e1e1e;padding:8px 16px;font-size:11px;color:#555;width:100%;text-align:center;"></div>
@@ -439,7 +441,15 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
     </div>
     <div id="checkin-pw-err" class="ci-pw-err"></div>
     <button class="ci-pw-btn" onclick="submitCheckinPw()">입장</button>
-    <button onclick="backToMeetingSelect()" style="margin-top:12px;background:transparent;border:1px solid #1e1e1e;color:#333;font-size:11px;padding:11px 20px;cursor:pointer;font-family:inherit;width:100%;">← 모임 다시 선택</button>
+    <button onclick="showGuestCheckin()" style="margin-top:10px;background:transparent;border:1px dashed #333;color:#ffa500;font-size:12px;padding:11px 20px;cursor:pointer;font-family:inherit;width:100%;">👋 서헬모 게스트세요? 게스트로 출석 →</button>
+    <button onclick="backToMeetingSelect()" style="margin-top:10px;background:transparent;border:1px solid #1e1e1e;color:#333;font-size:11px;padding:11px 20px;cursor:pointer;font-family:inherit;width:100%;">← 모임 다시 선택</button>
+  </div>
+  <div id="guest-section" style="display:none;width:100%">
+    <div id="ci-guest-tag" style="background:#141414;border:1px solid #1e1e1e;padding:8px 16px;font-size:11px;color:#555;width:100%;text-align:center;"></div>
+    <div class="ci-sub" style="margin:16px 0 8px;font-size:13px;color:#888;">👋 게스트 출석 (서헬모 등)</div>
+    <input id="guest-name-input" placeholder="이름 입력" autocomplete="off" style="width:100%;box-sizing:border-box;background:#141414;border:1px solid #1e1e1e;color:#fff;font-size:15px;padding:14px 16px;text-align:center;outline:none;font-family:inherit;">
+    <button class="ci-pw-btn" style="margin-top:12px" onclick="guestCheckIn()">출석하기</button>
+    <button onclick="backToMeetingSelect()" style="margin-top:10px;background:transparent;border:1px solid #1e1e1e;color:#333;font-size:11px;padding:11px 20px;cursor:pointer;font-family:inherit;width:100%;">← 모임 다시 선택</button>
   </div>
 </div>
 
@@ -740,6 +750,20 @@ function renderCurrentMeeting(){
     card.querySelector(`#pb${i}`).onclick=()=>toggle(i,"pay");
     list.appendChild(card);
   });
+  // 게스트(서헬모 등) 목록
+  const guests=m.guests||[];
+  const gwrap=document.getElementById("guest-list-wrap");
+  if(gwrap){
+    if(guests.length){
+      gwrap.style.display="block";
+      gwrap.innerHTML='<div style="font-size:11px;color:#ffa500;letter-spacing:.08em;margin-bottom:8px;">— 게스트 '+guests.length+'명</div>'+
+        guests.map((g,gi)=>'<div style="display:flex;align-items:center;gap:8px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:6px;">'+
+          '<span style="color:#fff;font-size:13px;">'+((g&&g.name)||'')+'</span>'+
+          '<span style="color:#ffa500;font-size:10px;">게스트</span>'+
+          ((g&&g.late)?'<span style="color:#ffa500;font-size:11px;">🕐 지각</span>':'')+
+          '<button onclick="removeGuest('+gi+')" style="margin-left:auto;background:transparent;border:1px solid #2a2a2a;color:#555;font-size:10px;padding:5px 9px;cursor:pointer;font-family:inherit;">삭제</button></div>').join("");
+    } else { gwrap.style.display="none"; gwrap.innerHTML=""; }
+  }
 }
 
 // 출석 토글: 미체크→출석→지각→취소→불참→미체크
@@ -1194,6 +1218,7 @@ function renderCheckinMeetings(){
   document.getElementById("meeting-select-section").style.display="block";
   document.getElementById("name-select-section").style.display="none";
   document.getElementById("password-section").style.display="none";
+  { const gs=document.getElementById("guest-section"); if(gs) gs.style.display="none"; }
   if(!meetings.length){
     wrap.innerHTML='<div style="text-align:center;color:#2a2a2a;font-size:12px;padding:40px 0;">현재 모임이 없어요</div>';
     return;
@@ -1274,7 +1299,9 @@ function submitCheckinPw(){
   if(val===(m.password||"").trim()){
     showCheckinNames(m.id);
   }else{
-    showPage("page-blocked");
+    document.getElementById("checkin-pw-err").textContent="비밀번호가 틀렸어요";
+    resetPin();
+    const f=document.querySelector("#pin-wrap .pin-box"); if(f) f.focus();
   }
 }
 window.submitCheckinPw=submitCheckinPw;
@@ -1347,6 +1374,58 @@ async function checkIn(i){
   }
   showPage("page-done");
 }
+
+// ── 게스트(서헬모 등) 출석: 비번 없이 이름만 입력 → guests 배열(멤버 통계 불변) ──
+function showGuestCheckin(){
+  const m=meetings.find(m=>m.id===selectedCheckinMeetingId); if(!m) return;
+  const dateStr=m.date?m.date.replace(/-/g,"."):"";
+  const typeLabel=m.type==="jeongmo"?"🏋️ 정모":"⚡ 벙";
+  const lateNow=isLate(m);
+  document.getElementById("ci-guest-tag").textContent=`${typeLabel} · ${dateStr} · ${m.gym||""}${lateNow?" 🕐 지각시간":""}`;
+  document.getElementById("meeting-select-section").style.display="none";
+  document.getElementById("password-section").style.display="none";
+  document.getElementById("name-select-section").style.display="none";
+  document.getElementById("guest-section").style.display="block";
+  const inp=document.getElementById("guest-name-input"); inp.value=""; setTimeout(()=>inp.focus(),120);
+}
+window.showGuestCheckin=showGuestCheckin;
+
+async function guestCheckIn(){
+  const m=meetings.find(m=>m.id===selectedCheckinMeetingId); if(!m) return;
+  const name=(document.getElementById("guest-name-input").value||"").trim();
+  if(!name){ alert("이름을 입력해주세요"); return; }
+  const late=isLate(m);
+  const ref=doc(db,"gbd_meetings",selectedCheckinMeetingId);
+  let dup=false;
+  await runTransaction(db,async t=>{
+    const snap=await t.get(ref); if(!snap.exists()) throw new Error("모임 없음");
+    const data=snap.data();
+    const guests=[...(data.guests||[])];
+    if(guests.some(g=>g&&g.name===name)){ dup=true; return; }
+    guests.push({name,late,t:Date.now()});
+    t.update(ref,{guests});
+  });
+  if(dup){ alert(name+"님은 이미 체크인했어요!"); return; }
+  document.getElementById("done-name").textContent=name+" (게스트)";
+  const dateStr=m.date?m.date.replace(/-/g,"."):"";
+  document.getElementById("done-meeting").textContent=`${m.type==="jeongmo"?"🏋️ 정모":"⚡ 벙"} · ${dateStr} · ${m.gym||""}`;
+  const doneMsg=document.getElementById("done-msg"),doneIcon=document.getElementById("done-icon"),doneSub=document.getElementById("done-sub");
+  if(late){ doneIcon.textContent="🕐"; doneMsg.textContent="지각 체크인!"; doneMsg.className="late"; doneSub.textContent="와줘서 고마워요! 💪"; }
+  else{ doneIcon.textContent="✅"; doneMsg.textContent="게스트 출석 완료!"; doneMsg.className="on-time"; doneSub.textContent="서헬모 환영합니다 💪"; }
+  showPage("page-done");
+}
+window.guestCheckIn=guestCheckIn;
+
+async function removeGuest(gi){
+  if(!confirm("이 게스트를 삭제할까요?")) return;
+  const ref=doc(db,"gbd_meetings",currentMeetingId);
+  await runTransaction(db,async t=>{
+    const snap=await t.get(ref); if(!snap.exists()) return;
+    const data=snap.data(); const guests=[...(data.guests||[])];
+    guests.splice(gi,1); t.update(ref,{guests});
+  });
+}
+window.removeGuest=removeGuest;
 
 window.backToMeetingSelect=function(){
   selectedCheckinMeetingId=null;

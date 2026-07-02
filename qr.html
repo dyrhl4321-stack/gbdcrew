@@ -12,7 +12,7 @@
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sans KR",sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
 
-.poster{background:#111;border:1px solid #222;padding:34px 30px 30px;display:flex;flex-direction:column;align-items:center;gap:22px;max-width:430px;width:100%;}
+.poster{background:#111;border:1px solid #222;padding:34px 30px 40px;display:flex;flex-direction:column;align-items:center;gap:22px;max-width:430px;width:100%;position:relative;min-height:620px;}
 
 /* 브랜드 */
 .brand{text-align:center;}
@@ -27,14 +27,15 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
 .main-cta b{color:#c8f542;font-weight:900;}
 
 /* 인스타 궁금증 존 */
-.insta-zone{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;color:#c8f542;margin-top:2px;padding-top:18px;border-top:1px solid #1c1c1c;}
-.curiosity{font-family:"Nanum Pen Script","Apple SD Gothic Neo",sans-serif;line-height:1.05;text-align:right;flex-shrink:0;}
-.curio-1{display:block;font-size:23px;color:#777;}
-.curio-2{display:block;font-size:30px;font-weight:400;color:#c8f542;}
-.arrow{width:62px;height:58px;flex-shrink:0;color:#c8f542;}
+/* 우측 하단 코너로 몰기(메인 QR과 거리 확보 → 동시 인식 방지) + 작게 */
+.insta-zone{position:absolute;right:18px;bottom:16px;display:flex;align-items:flex-end;gap:3px;color:#c8f542;}
+.curiosity{font-family:"Nanum Pen Script","Apple SD Gothic Neo",sans-serif;line-height:1.02;text-align:right;flex-shrink:0;padding-bottom:8px;}
+.curio-1{display:block;font-size:15px;color:#777;}
+.curio-2{display:block;font-size:19px;font-weight:400;color:#c8f542;}
+.arrow{width:40px;height:38px;flex-shrink:0;color:#c8f542;}
 
-.insta-card{display:flex;flex-direction:column;align-items:center;gap:7px;flex-shrink:0;}
-.qr-box-sm{background:#fff;padding:8px;border-radius:5px;line-height:0;}
+.insta-card{display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0;}
+.qr-box-sm{background:#fff;padding:6px;border-radius:4px;line-height:0;}
 .qr-box-sm img,.qr-box-sm canvas{display:block;max-width:100%;height:auto;}
 .insta-handle{font-size:11px;font-weight:900;letter-spacing:.04em;color:#eee;}
 .insta-label{font-size:9px;letter-spacing:.12em;color:#555;}
@@ -101,8 +102,8 @@ new QRCode(document.getElementById("qrcode-main"), {
 });
 new QRCode(document.getElementById("qrcode-insta"), {
   text: "https://instagram.com/gbd_project",
-  width: 110,
-  height: 110,
+  width: 76,
+  height: 76,
   colorDark: "#000000",
   colorLight: "#ffffff",
   correctLevel: QRCode.CorrectLevel.H
