@@ -213,7 +213,7 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
 .msc-time{font-size:10px;color:#444;margin-top:2px;}
 .msc-arrow{font-size:16px;color:#333;flex-shrink:0;}
 #ci-meeting-tag{background:#141414;border:1px solid #1e1e1e;padding:8px 16px;font-size:11px;color:#555;width:100%;text-align:center;}
-#name-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;}
+#name-grid,#guest-name-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;}
 .name-btn{padding:16px 8px;background:#111;border:1px solid #1e1e1e;color:#777;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;text-align:center;}
 .name-btn:active{transform:scale(0.96);}
 .name-btn.already-att{background:rgba(200,245,66,.06);border-color:rgba(200,245,66,.2);color:#c8f542;}
@@ -290,14 +290,15 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
       <div id="member-edit-list"></div>
     </div>
     <div>
-      <div class="m-label">— 게스트 명단 (서헬모 등 · 선택)</div>
+      <div class="m-label">— 게스트 (다른 모임 초대 · 선택)</div>
+      <input class="m-input" id="m-guest-group" placeholder="게스트 모임명 (예: 서헬모)" style="margin-bottom:8px;">
       <div class="member-add-row">
-        <input class="member-add-inp" id="new-guest-inp" placeholder="게스트 이름 입력 후 + 버튼" onkeydown="if(event.key==='Enter')addGuestToList()">
+        <input class="member-add-inp" id="new-guest-inp" placeholder="게스트 닉네임 입력 후 + 버튼" onkeydown="if(event.key==='Enter')addGuestToList()">
         <button class="member-add-btn" onclick="addGuestToList()">+</button>
       </div>
       <div class="member-count" id="guest-count">0명</div>
       <div id="guest-edit-list"></div>
-      <div style="font-size:9px;color:#333;margin-top:6px;letter-spacing:.08em;">👋 게스트는 근방단 멤버 통계·공금에 포함되지 않아요</div>
+      <div style="font-size:9px;color:#333;margin-top:6px;letter-spacing:.08em;">👋 게스트는 닉네임을 미리 등록 → 게스트가 QR로 본인 닉네임 선택해 출석. 멤버 통계·공금엔 미포함</div>
     </div>
   </div>
 </div>
@@ -456,10 +457,10 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
   </div>
   <div id="guest-section" style="display:none;width:100%">
     <div id="ci-guest-tag" style="background:#141414;border:1px solid #1e1e1e;padding:8px 16px;font-size:11px;color:#555;width:100%;text-align:center;"></div>
-    <div class="ci-sub" style="margin:16px 0 8px;font-size:13px;color:#888;">👋 게스트 출석 (서헬모 등)</div>
-    <input id="guest-name-input" placeholder="이름 입력" autocomplete="off" style="width:100%;box-sizing:border-box;background:#141414;border:1px solid #1e1e1e;color:#fff;font-size:15px;padding:14px 16px;text-align:center;outline:none;font-family:inherit;">
-    <button class="ci-pw-btn" style="margin-top:12px" onclick="guestCheckIn()">출석하기</button>
-    <button onclick="backToMeetingSelect()" style="margin-top:10px;background:transparent;border:1px solid #1e1e1e;color:#333;font-size:11px;padding:11px 20px;cursor:pointer;font-family:inherit;width:100%;">← 모임 다시 선택</button>
+    <div id="guest-title" style="margin:16px 0 4px;font-size:15px;color:#c8f542;font-weight:800;text-align:center;">게스트 출석</div>
+    <div class="ci-sub" style="font-size:10px;color:#444;margin-bottom:10px;letter-spacing:.08em;">본인 닉네임을 선택하세요 👇</div>
+    <div id="guest-name-grid"></div>
+    <button onclick="backToMeetingSelect()" style="margin-top:14px;background:transparent;border:1px solid #1e1e1e;color:#333;font-size:11px;padding:11px 20px;cursor:pointer;font-family:inherit;width:100%;">← 모임 다시 선택</button>
   </div>
 </div>
 
@@ -504,7 +505,17 @@ const ADMIN_PW = "5252";
 const LATE_MINUTES = 5; // 지각 기준: 시작 후 5분
 
 let meetings=[], archives=[], memberStats={}, currentMeetingId=null, currentArchiveEditId=null;
-let editMeetingId=null, selectedType="jeongmo", editMembers=[], editGuests=[];
+let editMeetingId=null, selectedType="jeongmo", editMembers=[], editGuests=[], editGuestGroup="";
+// 게스트 헬퍼: guests=닉네임 배열(로스터), guestStatus=[{attend,late}] 평행. 구버전([{name,late,t}])도 정규화.
+function guestRoster(m){ return ((m&&m.guests)||[]).map(g=> typeof g==='string'? g : ((g&&g.name)||"")); }
+function guestStat(m){
+  const raw=(m&&m.guests)||[], st=(m&&m.guestStatus)||[];
+  return raw.map((g,i)=>{
+    if(st[i]) return {attend:!!st[i].attend, late:!!st[i].late};
+    if(g&&typeof g==='object') return {attend: g.attend!==false && !g.late, late:!!g.late}; // 구버전=체크인된 상태
+    return {attend:false, late:false};
+  });
+}
 let selectedCheckinMeetingId=null;
 const params = new URLSearchParams(window.location.search);
 const mode = params.get("mode");
@@ -760,18 +771,23 @@ function renderCurrentMeeting(){
     card.querySelector(`#pb${i}`).onclick=()=>toggle(i,"pay");
     list.appendChild(card);
   });
-  // 게스트(서헬모 등): 메인엔 '게스트'로 분류해 표시만(추가/삭제는 편집 모달에서). 0명이면 숨김.
-  const guests=m.guests||[];
+  // 게스트: 메인엔 '{모임명} 게스트'로 분류해 상태(출석/지각/미체크) 표시만. 0명이면 숨김.
+  const gnames=guestRoster(m), gstat=guestStat(m);
+  const glist=gnames.map((n,i)=>({name:n,st:gstat[i]||{}})).filter(x=>x.name&&x.name.trim());
   const gwrap=document.getElementById("guest-list-wrap");
   if(gwrap){
-    if(guests.length){
+    if(glist.length){
       gwrap.style.display="block";
-      gwrap.innerHTML='<div style="font-size:11px;color:#ffa500;letter-spacing:.08em;margin-bottom:8px;">— 게스트 '+guests.length+'명</div>'+
-        guests.map(g=>'<div style="display:flex;align-items:center;gap:8px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:6px;">'+
-          '<span style="color:#fff;font-size:13px;">'+((g&&g.name)||'')+'</span>'+
-          '<span style="color:#ffa500;font-size:9px;border:1px solid #ffa500;border-radius:4px;padding:1px 5px;letter-spacing:.05em;">게스트</span>'+
-          ((g&&g.late)?'<span style="color:#ffa500;font-size:11px;margin-left:auto;">🕐 지각</span>':'')+
-          '</div>').join("");
+      const grp=(m.guestGroup||"").trim();
+      gwrap.innerHTML='<div style="font-size:11px;color:#ffa500;letter-spacing:.08em;margin-bottom:8px;">— '+(grp?grp+" ":"")+'게스트 '+glist.length+'명</div>'+
+        glist.map(x=>{
+          const label=x.st.late?'🕐 지각':x.st.attend?'✓ 출석':'미체크';
+          const col=x.st.late?'#ffa500':x.st.attend?'#c8f542':'#555';
+          return '<div style="display:flex;align-items:center;gap:8px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:6px;">'+
+            '<span style="color:#fff;font-size:13px;">'+x.name+'</span>'+
+            '<span style="color:#ffa500;font-size:9px;border:1px solid #ffa500;border-radius:4px;padding:1px 5px;letter-spacing:.05em;">게스트</span>'+
+            '<span style="color:'+col+';font-size:11px;margin-left:auto;">'+label+'</span></div>';
+        }).join("");
     } else { gwrap.style.display="none"; gwrap.innerHTML=""; }
   }
 }
@@ -1153,8 +1169,9 @@ async function applyDeduct(name){
 
 // ── 모임 추가/편집 ──
 window.openAddMeeting=function(){
-  editMeetingId=null;editMembers=[];editGuests=[];selectedType="jeongmo";
+  editMeetingId=null;editMembers=[];editGuests=[];editGuestGroup="";selectedType="jeongmo";
   document.getElementById("modal-title-txt").textContent="새 모임 추가";
+  document.getElementById("m-guest-group").value="";
   document.getElementById("m-date").value=new Date().toISOString().slice(0,10);
   document.getElementById("m-time").value="";
   document.getElementById("m-gym").value="";
@@ -1167,8 +1184,9 @@ window.openAddMeeting=function(){
 window.openEditMeeting=function(){
   const m=meetings.find(m=>m.id===currentMeetingId);
   if(!m) return;
-  editMeetingId=currentMeetingId;editMembers=[...(m.members||[])];editGuests=(m.guests||[]).map(g=>({...g}));
+  editMeetingId=currentMeetingId;editMembers=[...(m.members||[])];editGuests=guestRoster(m);editGuestGroup=m.guestGroup||"";
   selectedType=m.type||"jeongmo";
+  document.getElementById("m-guest-group").value=editGuestGroup;
   document.getElementById("modal-title-txt").textContent="모임 편집";
   document.getElementById("m-date").value=m.date||"";
   document.getElementById("m-time").value=m.startTime||"";
@@ -1199,8 +1217,11 @@ window.saveMeeting=async function(){
   const id=editMeetingId||`meeting_${Date.now()}`;
   const existing=editMeetingId?meetings.find(m=>m.id===editMeetingId):null;
   const status=existing?(existing.status||members.map(()=>({attend:false,late:false,cancel:false,pay:false}))):members.map(()=>({attend:false,late:false,cancel:false,pay:false}));
-  const guests=editGuests.filter(g=>g&&g.name&&g.name.trim()).map(g=>({name:g.name.trim(),late:!!g.late,t:g.t||Date.now()}));   // 편집 모달 게스트 명단 반영(+덮어쓰기 삭제 버그 방지)
-  await setDoc(doc(db,"gbd_meetings",id),{type:selectedType,date,startTime,gym,fee,members,status,password,guests});
+  const guestGroup=(document.getElementById("m-guest-group").value||"").trim();
+  const guestNames=editGuests.filter(n=>n&&n.trim()).map(n=>n.trim());
+  const prevNames=guestRoster(existing), prevStat=guestStat(existing);
+  const guestStatus=guestNames.map(n=>{ const j=prevNames.indexOf(n); return j>=0?prevStat[j]:{attend:false,late:false}; });  // 기존 게스트 출석상태 보존
+  await setDoc(doc(db,"gbd_meetings",id),{type:selectedType,date,startTime,gym,fee,members,status,password,guestGroup,guests:guestNames,guestStatus});
   currentMeetingId=id;window.closeMeetingModal();
 };
 
@@ -1225,12 +1246,12 @@ window.addMemberToList=function(){
 function renderGuestEditList(){
   const c=document.getElementById("guest-edit-list"); if(!c) return; c.innerHTML="";
   const cnt=document.getElementById("guest-count");
-  const upd=()=>{ if(cnt) cnt.textContent=`${editGuests.filter(g=>g&&g.name&&g.name.trim()).length}명`; };
+  const upd=()=>{ if(cnt) cnt.textContent=`${editGuests.filter(n=>n&&n.trim()).length}명`; };
   upd();
-  editGuests.forEach((g,i)=>{
+  editGuests.forEach((name,i)=>{
     const row=document.createElement("div");row.className="edit-row";
-    const inp=document.createElement("input");inp.value=(g&&g.name)||"";
-    inp.oninput=()=>{editGuests[i].name=inp.value;upd();};
+    const inp=document.createElement("input");inp.value=name||"";
+    inp.oninput=()=>{editGuests[i]=inp.value;upd();};
     const del=document.createElement("button");del.className="del-btn";del.textContent="✕";
     del.onclick=()=>{editGuests.splice(i,1);renderGuestEditList();};
     row.appendChild(inp);row.appendChild(del);c.appendChild(row);
@@ -1238,7 +1259,7 @@ function renderGuestEditList(){
 }
 window.addGuestToList=function(){
   const inp=document.getElementById("new-guest-inp");
-  if(inp.value.trim()){editGuests.push({name:inp.value.trim(),late:false,t:Date.now()});inp.value="";renderGuestEditList();}
+  if(inp.value.trim()){editGuests.push(inp.value.trim());inp.value="";renderGuestEditList();}
 };
 
 // ── 체크인 ──
@@ -1368,6 +1389,7 @@ function showCheckinNames(id){
 async function checkIn(i){
   const m=meetings.find(m=>m.id===selectedCheckinMeetingId);
   if(!m) return;
+  if(!confirm("'"+(m.members[i]||"")+"'(으)로 출석하시겠습니까?")) return;   // 오클릭 방지
   const late=isLate(m);
   const ref=doc(db,"gbd_meetings",selectedCheckinMeetingId);
   let alreadyDone=false;
@@ -1405,43 +1427,68 @@ async function checkIn(i){
   showPage("page-done");
 }
 
-// ── 게스트(서헬모 등) 출석: 비번 없이 이름만 입력 → guests 배열(멤버 통계 불변) ──
+// ── 게스트 출석: 관리자가 등록한 닉네임 로스터에서 본인 선택 → 확인 후 출석(멤버 통계 불변) ──
 function showGuestCheckin(){
   const m=meetings.find(m=>m.id===selectedCheckinMeetingId); if(!m) return;
   const dateStr=m.date?m.date.replace(/-/g,"."):"";
   const typeLabel=m.type==="jeongmo"?"🏋️ 정모":"⚡ 벙";
   const lateNow=isLate(m);
+  const grp=(m.guestGroup||"").trim();
   document.getElementById("ci-guest-tag").textContent=`${typeLabel} · ${dateStr} · ${m.gym||""}${lateNow?" 🕐 지각시간":""}`;
+  document.getElementById("guest-title").textContent=(grp?grp+" ":"")+"게스트 출석";
   document.getElementById("meeting-select-section").style.display="none";
   document.getElementById("password-section").style.display="none";
   document.getElementById("name-select-section").style.display="none";
   document.getElementById("guest-section").style.display="block";
-  const inp=document.getElementById("guest-name-input"); inp.value=""; setTimeout(()=>inp.focus(),120);
+  const grid=document.getElementById("guest-name-grid"); grid.innerHTML="";
+  const roster=guestRoster(m), gstat=guestStat(m);
+  if(!roster.filter(n=>n&&n.trim()).length){ grid.innerHTML='<div style="color:#444;font-size:12px;text-align:center;padding:24px 0;line-height:1.6;">등록된 게스트가 없어요.<br>관리자에게 문의하세요.</div>'; return; }
+  roster.forEach((name,i)=>{
+    if(!name||!name.trim()) return;
+    const st=gstat[i]||{};
+    const btn=document.createElement("button");
+    let cls="name-btn", label=name;
+    if(st.late){cls+=" already-late";label="🕐 "+name;}
+    else if(st.attend){cls+=" already-att";label="✓ "+name;}
+    btn.className=cls;btn.textContent=label;
+    btn.onclick=()=>guestCheckIn(i);
+    grid.appendChild(btn);
+  });
 }
 window.showGuestCheckin=showGuestCheckin;
 
-async function guestCheckIn(){
+async function guestCheckIn(i){
   const m=meetings.find(m=>m.id===selectedCheckinMeetingId); if(!m) return;
-  const name=(document.getElementById("guest-name-input").value||"").trim();
-  if(!name){ alert("이름을 입력해주세요"); return; }
+  const roster=guestRoster(m); const name=roster[i]; if(!name) return;
+  if(!confirm("'"+name+"'(으)로 출석하시겠습니까?")) return;
   const late=isLate(m);
   const ref=doc(db,"gbd_meetings",selectedCheckinMeetingId);
-  let dup=false;
+  let already=false, gone=false;
   await runTransaction(db,async t=>{
     const snap=await t.get(ref); if(!snap.exists()) throw new Error("모임 없음");
     const data=snap.data();
-    const guests=[...(data.guests||[])];
-    if(guests.some(g=>g&&g.name===name)){ dup=true; return; }
-    guests.push({name,late,t:Date.now()});
-    t.update(ref,{guests});
+    const gnames=(data.guests||[]).map(g=> typeof g==='string'? g : ((g&&g.name)||""));
+    const gstatus=gnames.map((n,k)=>{
+      if(data.guestStatus&&data.guestStatus[k]) return {attend:!!data.guestStatus[k].attend, late:!!data.guestStatus[k].late};
+      const raw=data.guests[k];
+      if(raw&&typeof raw==='object') return {attend: raw.attend!==false && !raw.late, late:!!raw.late};
+      return {attend:false, late:false};
+    });
+    const idx=gnames.indexOf(name);
+    if(idx<0){ gone=true; return; }
+    if(gstatus[idx].attend||gstatus[idx].late){ already=true; return; }
+    gstatus[idx]={attend:!late, late:!!late};
+    t.update(ref,{guests:gnames, guestStatus:gstatus});
   });
-  if(dup){ alert(name+"님은 이미 체크인했어요!"); return; }
-  document.getElementById("done-name").textContent=name+" (게스트)";
+  if(gone){ alert(name+"님이 게스트 명단에 없어요. 관리자에게 문의하세요."); return; }
+  if(already){ alert(name+"님은 이미 체크인했어요!"); return; }
+  const grp=((m.guestGroup||"").trim())||"게스트";
+  document.getElementById("done-name").textContent=name+" ("+grp+")";
   const dateStr=m.date?m.date.replace(/-/g,"."):"";
   document.getElementById("done-meeting").textContent=`${m.type==="jeongmo"?"🏋️ 정모":"⚡ 벙"} · ${dateStr} · ${m.gym||""}`;
   const doneMsg=document.getElementById("done-msg"),doneIcon=document.getElementById("done-icon"),doneSub=document.getElementById("done-sub");
   if(late){ doneIcon.textContent="🕐"; doneMsg.textContent="지각 체크인!"; doneMsg.className="late"; doneSub.textContent="와줘서 고마워요! 💪"; }
-  else{ doneIcon.textContent="✅"; doneMsg.textContent="게스트 출석 완료!"; doneMsg.className="on-time"; doneSub.textContent="서헬모 환영합니다 💪"; }
+  else{ doneIcon.textContent="✅"; doneMsg.textContent="게스트 출석 완료!"; doneMsg.className="on-time"; doneSub.textContent=grp+" 환영합니다 💪"; }
   showPage("page-done");
 }
 window.guestCheckIn=guestCheckIn;
