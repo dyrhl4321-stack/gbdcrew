@@ -1511,34 +1511,6 @@ async function toggleGuest(i){
 }
 window.toggleGuest=toggleGuest;
 
-async function addGuestByAdmin(){
-  if(!currentMeetingId){ alert("모임을 먼저 선택하세요"); return; }
-  const name=(prompt("추가할 게스트 이름 (서헬모 등)")||"").trim();
-  if(!name) return;
-  const ref=doc(db,"gbd_meetings",currentMeetingId);
-  let dup=false;
-  await runTransaction(db,async t=>{
-    const snap=await t.get(ref); if(!snap.exists()) return;
-    const data=snap.data(); const guests=[...(data.guests||[])];
-    if(guests.some(g=>g&&g.name===name)){ dup=true; return; }
-    guests.push({name,late:false,t:Date.now()});
-    t.update(ref,{guests});
-  });
-  if(dup) alert(name+"님은 이미 게스트에 있어요!");
-}
-window.addGuestByAdmin=addGuestByAdmin;
-
-async function removeGuest(gi){
-  if(!confirm("이 게스트를 삭제할까요?")) return;
-  const ref=doc(db,"gbd_meetings",currentMeetingId);
-  await runTransaction(db,async t=>{
-    const snap=await t.get(ref); if(!snap.exists()) return;
-    const data=snap.data(); const guests=[...(data.guests||[])];
-    guests.splice(gi,1); t.update(ref,{guests});
-  });
-}
-window.removeGuest=removeGuest;
-
 window.backToMeetingSelect=function(){
   selectedCheckinMeetingId=null;
   showPage("page-checkin");
