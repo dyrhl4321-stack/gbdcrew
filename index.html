@@ -95,7 +95,9 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
 #sync-bar.synced{color:#c8f542;}
 #sync-bar.error{color:#ff4444;}
 #sec-label{font-size:9px;letter-spacing:.35em;color:#222;padding:12px 20px 6px;}
-#member-list{padding:0 16px;display:flex;flex-direction:column;gap:5px;padding-bottom:80px;}
+#member-list{padding:0 16px;display:flex;flex-direction:column;gap:5px;padding-bottom:6px;}
+#guest-list-wrap{padding:0 16px;}
+#meeting-content{padding-bottom:110px;}
 .mc{display:flex;align-items:center;gap:10px;padding:12px 14px;background:#111;border:1px solid #181818;position:relative;overflow:hidden;transition:all .2s;}
 .mc.att{background:rgba(200,245,66,.04);border-color:rgba(200,245,66,.15);}
 .mc.late{background:rgba(255,165,0,.04);border-color:rgba(255,165,0,.15);}
@@ -343,12 +345,11 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
       <div id="gongeum-display" style="font-size:11px;color:#c8f542;font-weight:700;letter-spacing:.05em;padding:0 0 4px;"></div>
     </div>
     <div id="stats">
-      <div class="stat"><div class="snum" id="s-total">0</div><div class="slbl">TOTAL</div></div>
+      <div class="stat"><div class="snum" id="s-total">0</div><div class="slbl">TOTAL</div><div id="total-breakdown" style="display:none;font-size:8px;color:#666;margin-top:3px;line-height:1.35;"></div></div>
       <div class="stat"><div class="snum" style="color:#c8f542" id="s-att">0</div><div class="slbl">출석</div></div>
       <div class="stat"><div class="snum" style="color:#ffa500" id="s-late">0</div><div class="slbl">지각</div></div>
       <div class="stat"><div class="snum" style="color:#4fc3f7" id="s-pay">0</div><div class="slbl">입금</div></div>
     </div>
-    <div id="total-breakdown" style="display:none;font-size:10px;color:#777;text-align:center;margin-top:4px;letter-spacing:.05em;"></div>
     <div id="prog-wrap"><div id="prog-bar"></div></div>
     <div id="legend">
       <div class="leg"><span class="dot" style="background:#c8f542"></span>출석</div>
@@ -748,7 +749,7 @@ function renderCurrentMeeting(){
   document.getElementById("s-pay").textContent=pay;
   document.getElementById("prog-bar").style.width=denom?Math.round((att+late+gAtt)/denom*100)+"%":"0%";
   const tb=document.getElementById("total-breakdown");
-  if(tb){ if(gTotal>0){ tb.style.display="block"; tb.textContent="근방단 "+members.length+"명 · 게스트 "+gTotal+"명"; } else tb.style.display="none"; }
+  if(tb){ if(gTotal>0){ tb.style.display="block"; tb.innerHTML="근방단 "+members.length+"<br>게스트 "+gTotal; } else tb.style.display="none"; }
   // 공금 표시
   const geEl=document.getElementById("gongeum-display");
   if(geEl) geEl.textContent=fee>0?`💰 공금 +${gongeum.toLocaleString()}원 (불참${absent}+취소${cancel})×${fee.toLocaleString()}원`:"";
@@ -1211,6 +1212,9 @@ window.selectType=function(type){
 };
 
 window.saveMeeting=async function(){
+  // + 안 누르고 저장해도 입력칸에 남은 이름 포함(마지막 이름 유실 방지)
+  { const pm=(document.getElementById("new-member-inp").value||"").trim(); if(pm){editMembers.push(pm);document.getElementById("new-member-inp").value="";}
+    const pg=(document.getElementById("new-guest-inp").value||"").trim(); if(pg){editGuests.push(pg);document.getElementById("new-guest-inp").value="";} }
   const date=document.getElementById("m-date").value;
   const startTime=document.getElementById("m-time").value;
   const gym=document.getElementById("m-gym").value.trim();

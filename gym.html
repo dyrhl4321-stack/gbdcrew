@@ -96,9 +96,8 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
   <div class="sum-item sum-late"><div class="sum-num" id="s-late">0</div><div class="sum-lbl">지각</div></div>
   <div class="sum-item sum-cancel"><div class="sum-num" id="s-cancel">0</div><div class="sum-lbl">취소</div></div>
   <div class="sum-item sum-absent"><div class="sum-num" id="s-absent">0</div><div class="sum-lbl">불참</div></div>
-  <div class="sum-item"><div class="sum-num" id="s-total" style="color:#888">0</div><div class="sum-lbl">전체</div></div>
+  <div class="sum-item"><div class="sum-num" id="s-total" style="color:#888">0</div><div class="sum-lbl">전체</div><div id="total-breakdown" style="display:none;font-size:8px;color:#666;margin-top:3px;line-height:1.35;"></div></div>
 </div>
-<div id="total-breakdown" style="display:none;font-size:10px;color:#777;text-align:center;margin:4px 0 0;letter-spacing:.05em;"></div>
 <div id="prog-wrap"><div id="prog-bar"></div></div>
 <div id="member-list"></div>
 <div id="empty"><div class="e-icon">📋</div><div class="e-text">오늘 등록된 모임이 없어요</div></div>
@@ -213,13 +212,15 @@ function renderMeeting() {
   document.getElementById('s-late').textContent = late;
   document.getElementById('s-cancel').textContent = cancel;
   document.getElementById('s-absent').textContent = absent;
-  document.getElementById('s-total').textContent = members.length + gTotal;
+  // 헬스장 화면 '전체' = 실제 출석(온 사람) 수 = 근방단 출석/지각 + 게스트 출석
+  const present = att + late + gAtt;
+  document.getElementById('s-total').textContent = present;
 
   const denom = members.length + gTotal;
   const checked = att + late + gAtt;
   document.getElementById('prog-bar').style.width = denom ? Math.round(checked / denom * 100) + '%' : '0%';
   const tb = document.getElementById('total-breakdown');
-  if (tb) { if (gTotal>0) { tb.style.display='block'; tb.textContent='근방단 '+members.length+'명 · 게스트 '+gTotal+'명'; } else tb.style.display='none'; }
+  if (tb) { if (gTotal>0) { tb.style.display='block'; tb.innerHTML='근방단 '+(att+late)+'<br>게스트 '+gAtt; } else tb.style.display='none'; }
 
   const list = document.getElementById('member-list');
   const membersHtml = members.map((name, i) => {
