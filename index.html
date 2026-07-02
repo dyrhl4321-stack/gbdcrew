@@ -289,6 +289,16 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
       <div class="member-count" id="member-count">0명</div>
       <div id="member-edit-list"></div>
     </div>
+    <div>
+      <div class="m-label">— 게스트 명단 (서헬모 등 · 선택)</div>
+      <div class="member-add-row">
+        <input class="member-add-inp" id="new-guest-inp" placeholder="게스트 이름 입력 후 + 버튼" onkeydown="if(event.key==='Enter')addGuestToList()">
+        <button class="member-add-btn" onclick="addGuestToList()">+</button>
+      </div>
+      <div class="member-count" id="guest-count">0명</div>
+      <div id="guest-edit-list"></div>
+      <div style="font-size:9px;color:#333;margin-top:6px;letter-spacing:.08em;">👋 게스트는 근방단 멤버 통계·공금에 포함되지 않아요</div>
+    </div>
   </div>
 </div>
 
@@ -494,7 +504,7 @@ const ADMIN_PW = "5252";
 const LATE_MINUTES = 5; // 지각 기준: 시작 후 5분
 
 let meetings=[], archives=[], memberStats={}, currentMeetingId=null, currentArchiveEditId=null;
-let editMeetingId=null, selectedType="jeongmo", editMembers=[];
+let editMeetingId=null, selectedType="jeongmo", editMembers=[], editGuests=[];
 let selectedCheckinMeetingId=null;
 const params = new URLSearchParams(window.location.search);
 const mode = params.get("mode");
@@ -1143,21 +1153,21 @@ async function applyDeduct(name){
 
 // ── 모임 추가/편집 ──
 window.openAddMeeting=function(){
-  editMeetingId=null;editMembers=[];selectedType="jeongmo";
+  editMeetingId=null;editMembers=[];editGuests=[];selectedType="jeongmo";
   document.getElementById("modal-title-txt").textContent="새 모임 추가";
   document.getElementById("m-date").value=new Date().toISOString().slice(0,10);
   document.getElementById("m-time").value="";
   document.getElementById("m-gym").value="";
   document.getElementById("m-fee").value="";
   document.getElementById("m-password").value="";
-  selectType("jeongmo");renderMemberEditList();
+  selectType("jeongmo");renderMemberEditList();renderGuestEditList();
   document.getElementById("meeting-modal").classList.add("open");
 };
 
 window.openEditMeeting=function(){
   const m=meetings.find(m=>m.id===currentMeetingId);
   if(!m) return;
-  editMeetingId=currentMeetingId;editMembers=[...(m.members||[])];
+  editMeetingId=currentMeetingId;editMembers=[...(m.members||[])];editGuests=(m.guests||[]).map(g=>({...g}));
   selectedType=m.type||"jeongmo";
   document.getElementById("modal-title-txt").textContent="모임 편집";
   document.getElementById("m-date").value=m.date||"";
@@ -1165,7 +1175,7 @@ window.openEditMeeting=function(){
   document.getElementById("m-gym").value=m.gym||"";
   document.getElementById("m-fee").value=m.fee||15000;
   document.getElementById("m-password").value=m.password||"";
-  selectType(selectedType);renderMemberEditList();
+  selectType(selectedType);renderMemberEditList();renderGuestEditList();
   document.getElementById("meeting-modal").classList.add("open");
 };
 
@@ -1189,7 +1199,8 @@ window.saveMeeting=async function(){
   const id=editMeetingId||`meeting_${Date.now()}`;
   const existing=editMeetingId?meetings.find(m=>m.id===editMeetingId):null;
   const status=existing?(existing.status||members.map(()=>({attend:false,late:false,cancel:false,pay:false}))):members.map(()=>({attend:false,late:false,cancel:false,pay:false}));
-  await setDoc(doc(db,"gbd_meetings",id),{type:selectedType,date,startTime,gym,fee,members,status,password});
+  const guests=editGuests.filter(g=>g&&g.name&&g.name.trim()).map(g=>({name:g.name.trim(),late:!!g.late,t:g.t||Date.now()}));   // 편집 모달 게스트 명단 반영(+덮어쓰기 삭제 버그 방지)
+  await setDoc(doc(db,"gbd_meetings",id),{type:selectedType,date,startTime,gym,fee,members,status,password,guests});
   currentMeetingId=id;window.closeMeetingModal();
 };
 
@@ -1209,6 +1220,25 @@ function renderMemberEditList(){
 window.addMemberToList=function(){
   const inp=document.getElementById("new-member-inp");
   if(inp.value.trim()){editMembers.push(inp.value.trim());inp.value="";renderMemberEditList();}
+};
+
+function renderGuestEditList(){
+  const c=document.getElementById("guest-edit-list"); if(!c) return; c.innerHTML="";
+  const cnt=document.getElementById("guest-count");
+  const upd=()=>{ if(cnt) cnt.textContent=`${editGuests.filter(g=>g&&g.name&&g.name.trim()).length}명`; };
+  upd();
+  editGuests.forEach((g,i)=>{
+    const row=document.createElement("div");row.className="edit-row";
+    const inp=document.createElement("input");inp.value=(g&&g.name)||"";
+    inp.oninput=()=>{editGuests[i].name=inp.value;upd();};
+    const del=document.createElement("button");del.className="del-btn";del.textContent="✕";
+    del.onclick=()=>{editGuests.splice(i,1);renderGuestEditList();};
+    row.appendChild(inp);row.appendChild(del);c.appendChild(row);
+  });
+}
+window.addGuestToList=function(){
+  const inp=document.getElementById("new-guest-inp");
+  if(inp.value.trim()){editGuests.push({name:inp.value.trim(),late:false,t:Date.now()});inp.value="";renderGuestEditList();}
 };
 
 // ── 체크인 ──
