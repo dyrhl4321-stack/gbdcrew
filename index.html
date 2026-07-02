@@ -348,6 +348,7 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
       <div class="stat"><div class="snum" style="color:#ffa500" id="s-late">0</div><div class="slbl">지각</div></div>
       <div class="stat"><div class="snum" style="color:#4fc3f7" id="s-pay">0</div><div class="slbl">입금</div></div>
     </div>
+    <div id="total-breakdown" style="display:none;font-size:10px;color:#777;text-align:center;margin-top:4px;letter-spacing:.05em;"></div>
     <div id="prog-wrap"><div id="prog-bar"></div></div>
     <div id="legend">
       <div class="leg"><span class="dot" style="background:#c8f542"></span>출석</div>
@@ -510,10 +511,8 @@ let editMeetingId=null, selectedType="jeongmo", editMembers=[], editGuests=[], e
 function guestRoster(m){ return ((m&&m.guests)||[]).map(g=> typeof g==='string'? g : ((g&&g.name)||"")); }
 function guestStat(m){
   const raw=(m&&m.guests)||[], st=(m&&m.guestStatus)||[];
-  return raw.map((g,i)=>{
-    if(st[i]) return {attend:!!st[i].attend, late:!!st[i].late};
-    return {attend:false, late:false}; // 디폴트=미출석 (구버전 객체도 미출석으로, 관리자가 로스터만 등록)
-  });
+  // 게스트 상태 = {attend, absent}만. 신형식(absent 필드 有)만 신뢰 → 구형식/자동생성은 미체크(디폴트).
+  return raw.map((g,i)=>{ const s=st[i]; return (s&&('absent' in s))?{attend:!!s.attend, absent:!!s.absent}:{attend:false, absent:false}; });
 }
 let selectedCheckinMeetingId=null;
 const params = new URLSearchParams(window.location.search);
@@ -741,13 +740,15 @@ function renderCurrentMeeting(){
   // 게스트: total·출석에만 포함(지각/입금/공금은 근방단 전용 로직이라 미포함)
   const gNames=guestRoster(m), gSt=guestStat(m);
   let gTotal=0, gAtt=0;
-  gNames.forEach((n,i)=>{ if(n&&n.trim()){ gTotal++; if(gSt[i]&&(gSt[i].attend||gSt[i].late)) gAtt++; } });
+  gNames.forEach((n,i)=>{ if(n&&n.trim()){ gTotal++; if(gSt[i]&&gSt[i].attend) gAtt++; } });
   const denom=members.length+gTotal;
   document.getElementById("s-total").textContent=denom;
   document.getElementById("s-att").textContent=att+gAtt;
   document.getElementById("s-late").textContent=late;
   document.getElementById("s-pay").textContent=pay;
   document.getElementById("prog-bar").style.width=denom?Math.round((att+late+gAtt)/denom*100)+"%":"0%";
+  const tb=document.getElementById("total-breakdown");
+  if(tb){ if(gTotal>0){ tb.style.display="block"; tb.textContent="근방단 "+members.length+"명 · 게스트 "+gTotal+"명"; } else tb.style.display="none"; }
   // 공금 표시
   const geEl=document.getElementById("gongeum-display");
   if(geEl) geEl.textContent=fee>0?`💰 공금 +${gongeum.toLocaleString()}원 (불참${absent}+취소${cancel})×${fee.toLocaleString()}원`:"";
@@ -777,7 +778,7 @@ function renderCurrentMeeting(){
   });
   // 게스트: 메인엔 '{모임명} 게스트'로 분류해 상태(출석/지각/미체크) 표시만. 0명이면 숨김.
   const gnames=guestRoster(m), gstat=guestStat(m);
-  const glist=gnames.map((n,i)=>({name:n,st:gstat[i]||{}})).filter(x=>x.name&&x.name.trim());
+  const glist=gnames.map((n,i)=>({name:n,st:gstat[i]||{},idx:i})).filter(x=>x.name&&x.name.trim());
   const gwrap=document.getElementById("guest-list-wrap");
   if(gwrap){
     if(glist.length){
@@ -785,12 +786,12 @@ function renderCurrentMeeting(){
       const grp=(m.guestGroup||"").trim();
       gwrap.innerHTML='<div style="font-size:11px;color:#ffa500;letter-spacing:.08em;margin-bottom:8px;">— '+(grp?grp+" ":"")+'게스트 '+glist.length+'명</div>'+
         glist.map(x=>{
-          const label=x.st.late?'🕐 지각':x.st.attend?'✓ 출석':'미체크';
-          const col=x.st.late?'#ffa500':x.st.attend?'#c8f542':'#555';
-          return '<div style="display:flex;align-items:center;gap:8px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:6px;">'+
+          const label=x.st.absent?'❌ 불참':x.st.attend?'✓ 출석':'출석';
+          const bcls=x.st.absent?'absent-on':x.st.attend?'att-on':'';
+          return '<div style="display:flex;align-items:center;gap:8px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:8px 12px;margin-bottom:6px;">'+
             '<span style="color:#fff;font-size:13px;">'+x.name+'</span>'+
             '<span style="color:#ffa500;font-size:9px;border:1px solid #ffa500;border-radius:4px;padding:1px 5px;letter-spacing:.05em;">게스트</span>'+
-            '<span style="color:'+col+';font-size:11px;margin-left:auto;">'+label+'</span></div>';
+            '<button class="mbtn '+bcls+'" style="margin-left:auto;" onclick="toggleGuest('+x.idx+')">'+label+'</button></div>';
         }).join("");
     } else { gwrap.style.display="none"; gwrap.innerHTML=""; }
   }
@@ -1452,8 +1453,8 @@ function showGuestCheckin(){
     const st=gstat[i]||{};
     const btn=document.createElement("button");
     let cls="name-btn", label=name;
-    if(st.late){cls+=" already-late";label="🕐 "+name;}
-    else if(st.attend){cls+=" already-att";label="✓ "+name;}
+    if(st.attend){cls+=" already-att";label="✓ "+name;}
+    else if(st.absent){label="❌ "+name;}
     btn.className=cls;btn.textContent=label;
     btn.onclick=()=>guestCheckIn(i);
     grid.appendChild(btn);
@@ -1465,24 +1466,18 @@ async function guestCheckIn(i){
   const m=meetings.find(m=>m.id===selectedCheckinMeetingId); if(!m) return;
   const roster=guestRoster(m); const name=roster[i]; if(!name) return;
   if(!confirm("'"+name+"'(으)로 출석하시겠습니까?")) return;
-  const late=isLate(m);
   const ref=doc(db,"gbd_meetings",selectedCheckinMeetingId);
   let already=false, gone=false;
   await runTransaction(db,async t=>{
     const snap=await t.get(ref); if(!snap.exists()) throw new Error("모임 없음");
     const data=snap.data();
     const gnames=(data.guests||[]).map(g=> typeof g==='string'? g : ((g&&g.name)||""));
-    const gstatus=gnames.map((n,k)=>{
-      if(data.guestStatus&&data.guestStatus[k]) return {attend:!!data.guestStatus[k].attend, late:!!data.guestStatus[k].late};
-      const raw=data.guests[k];
-      if(raw&&typeof raw==='object') return {attend: raw.attend!==false && !raw.late, late:!!raw.late};
-      return {attend:false, late:false};
-    });
+    const gst=gnames.map((n,k)=>{ const s=data.guestStatus&&data.guestStatus[k]; return (s&&('absent' in s))?{attend:!!s.attend, absent:!!s.absent}:{attend:false, absent:false}; });
     const idx=gnames.indexOf(name);
     if(idx<0){ gone=true; return; }
-    if(gstatus[idx].attend||gstatus[idx].late){ already=true; return; }
-    gstatus[idx]={attend:!late, late:!!late};
-    t.update(ref,{guests:gnames, guestStatus:gstatus});
+    if(gst[idx].attend){ already=true; return; }
+    gst[idx]={attend:true, absent:false};
+    t.update(ref,{guests:gnames, guestStatus:gst});
   });
   if(gone){ alert(name+"님이 게스트 명단에 없어요. 관리자에게 문의하세요."); return; }
   if(already){ alert(name+"님은 이미 체크인했어요!"); return; }
@@ -1491,11 +1486,26 @@ async function guestCheckIn(i){
   const dateStr=m.date?m.date.replace(/-/g,"."):"";
   document.getElementById("done-meeting").textContent=`${m.type==="jeongmo"?"🏋️ 정모":"⚡ 벙"} · ${dateStr} · ${m.gym||""}`;
   const doneMsg=document.getElementById("done-msg"),doneIcon=document.getElementById("done-icon"),doneSub=document.getElementById("done-sub");
-  if(late){ doneIcon.textContent="🕐"; doneMsg.textContent="지각 체크인!"; doneMsg.className="late"; doneSub.textContent="와줘서 고마워요! 💪"; }
-  else{ doneIcon.textContent="✅"; doneMsg.textContent="게스트 출석 완료!"; doneMsg.className="on-time"; doneSub.textContent=grp+" 환영합니다 💪"; }
+  doneIcon.textContent="✅"; doneMsg.textContent="게스트 출석 완료!"; doneMsg.className="on-time"; doneSub.textContent=grp+" 환영합니다 💪";
   showPage("page-done");
 }
 window.guestCheckIn=guestCheckIn;
+// 관리자: 게스트 출석 토글 (미체크→출석→불참→미체크). 지각·취소·입금은 게스트에 없음.
+async function toggleGuest(i){
+  const ref=doc(db,"gbd_meetings",currentMeetingId);
+  await runTransaction(db,async t=>{
+    const snap=await t.get(ref); if(!snap.exists()) return;
+    const data=snap.data();
+    const gnames=(data.guests||[]).map(g=> typeof g==='string'? g : ((g&&g.name)||""));
+    const gst=gnames.map((n,k)=>{ const s=data.guestStatus&&data.guestStatus[k]; return (s&&('absent' in s))?{attend:!!s.attend, absent:!!s.absent}:{attend:false, absent:false}; });
+    const s=gst[i]||{attend:false,absent:false};
+    if(!s.attend&&!s.absent) gst[i]={attend:true,absent:false};
+    else if(s.attend) gst[i]={attend:false,absent:true};
+    else gst[i]={attend:false,absent:false};
+    t.update(ref,{guests:gnames, guestStatus:gst});
+  });
+}
+window.toggleGuest=toggleGuest;
 
 async function addGuestByAdmin(){
   if(!currentMeetingId){ alert("모임을 먼저 선택하세요"); return; }

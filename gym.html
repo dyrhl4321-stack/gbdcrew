@@ -98,6 +98,7 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
   <div class="sum-item sum-absent"><div class="sum-num" id="s-absent">0</div><div class="sum-lbl">불참</div></div>
   <div class="sum-item"><div class="sum-num" id="s-total" style="color:#888">0</div><div class="sum-lbl">전체</div></div>
 </div>
+<div id="total-breakdown" style="display:none;font-size:10px;color:#777;text-align:center;margin:4px 0 0;letter-spacing:.05em;"></div>
 <div id="prog-wrap"><div id="prog-bar"></div></div>
 <div id="member-list"></div>
 <div id="empty"><div class="e-icon">📋</div><div class="e-text">오늘 등록된 모임이 없어요</div></div>
@@ -203,9 +204,9 @@ function renderMeeting() {
   // 게스트: 전체·출석에 포함(지각/취소/불참은 근방단 전용 로직이라 미포함)
   const gRaw = m.guests || [];
   const gNames = gRaw.map(g => typeof g === 'string' ? g : (g && g.name) || '');
-  const gStatArr = gNames.map((n,i) => (m.guestStatus && m.guestStatus[i]) ? { attend: !!m.guestStatus[i].attend, late: !!m.guestStatus[i].late } : { attend:false, late:false });
+  const gStatArr = gNames.map((n,i) => { const s = m.guestStatus && m.guestStatus[i]; return (s && ('absent' in s)) ? { attend: !!s.attend, absent: !!s.absent } : { attend:false, absent:false }; });
   let gTotal=0, gAtt=0;
-  gNames.forEach((n,i)=>{ if(n && n.trim()){ gTotal++; if(gStatArr[i] && (gStatArr[i].attend||gStatArr[i].late)) gAtt++; } });
+  gNames.forEach((n,i)=>{ if(n && n.trim()){ gTotal++; if(gStatArr[i] && gStatArr[i].attend) gAtt++; } });
 
   document.getElementById('summary').style.display = 'flex';
   document.getElementById('s-att').textContent = att + gAtt;
@@ -217,6 +218,8 @@ function renderMeeting() {
   const denom = members.length + gTotal;
   const checked = att + late + gAtt;
   document.getElementById('prog-bar').style.width = denom ? Math.round(checked / denom * 100) + '%' : '0%';
+  const tb = document.getElementById('total-breakdown');
+  if (tb) { if (gTotal>0) { tb.style.display='block'; tb.textContent='근방단 '+members.length+'명 · 게스트 '+gTotal+'명'; } else tb.style.display='none'; }
 
   const list = document.getElementById('member-list');
   const membersHtml = members.map((name, i) => {
@@ -240,7 +243,7 @@ function renderMeeting() {
     guestHtml = `<div style="font-size:11px;color:#ffa500;letter-spacing:.08em;margin:14px 0 8px;">— ${grp?grp+' ':''}게스트 ${gShown.length}명</div>` +
       gShown.map(x => {
         let statusTxt='미체크', statusCls='status-none';
-        if (x.st.late) { statusTxt='🕐 지각'; statusCls='status-late'; }
+        if (x.st.absent) { statusTxt='❌ 불참'; statusCls='status-absent'; }
         else if (x.st.attend) { statusTxt='✓ 출석'; statusCls='status-att'; }
         return `<div class="mc">
       <div class="mbar"></div>
