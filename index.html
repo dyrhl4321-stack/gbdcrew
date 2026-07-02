@@ -754,15 +754,15 @@ function renderCurrentMeeting(){
   const guests=m.guests||[];
   const gwrap=document.getElementById("guest-list-wrap");
   if(gwrap){
-    if(guests.length){
-      gwrap.style.display="block";
-      gwrap.innerHTML='<div style="font-size:11px;color:#ffa500;letter-spacing:.08em;margin-bottom:8px;">— 게스트 '+guests.length+'명</div>'+
-        guests.map((g,gi)=>'<div style="display:flex;align-items:center;gap:8px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:6px;">'+
-          '<span style="color:#fff;font-size:13px;">'+((g&&g.name)||'')+'</span>'+
-          '<span style="color:#ffa500;font-size:10px;">게스트</span>'+
-          ((g&&g.late)?'<span style="color:#ffa500;font-size:11px;">🕐 지각</span>':'')+
-          '<button onclick="removeGuest('+gi+')" style="margin-left:auto;background:transparent;border:1px solid #2a2a2a;color:#555;font-size:10px;padding:5px 9px;cursor:pointer;font-family:inherit;">삭제</button></div>').join("");
-    } else { gwrap.style.display="none"; gwrap.innerHTML=""; }
+    gwrap.style.display="block";
+    gwrap.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'+
+      '<span style="font-size:11px;color:#ffa500;letter-spacing:.08em;">— 게스트 '+guests.length+'명</span>'+
+      '<button onclick="addGuestByAdmin()" style="background:transparent;border:1px solid #ffa500;color:#ffa500;font-size:10px;padding:5px 11px;cursor:pointer;font-family:inherit;border-radius:6px;">+ 게스트 추가</button></div>'+
+      guests.map((g,gi)=>'<div style="display:flex;align-items:center;gap:8px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:6px;">'+
+        '<span style="color:#fff;font-size:13px;">'+((g&&g.name)||'')+'</span>'+
+        '<span style="color:#ffa500;font-size:10px;">게스트</span>'+
+        ((g&&g.late)?'<span style="color:#ffa500;font-size:11px;">🕐 지각</span>':'')+
+        '<button onclick="removeGuest('+gi+')" style="margin-left:auto;background:transparent;border:1px solid #2a2a2a;color:#555;font-size:10px;padding:5px 9px;cursor:pointer;font-family:inherit;">삭제</button></div>').join("");
   }
 }
 
@@ -1415,6 +1415,23 @@ async function guestCheckIn(){
   showPage("page-done");
 }
 window.guestCheckIn=guestCheckIn;
+
+async function addGuestByAdmin(){
+  if(!currentMeetingId){ alert("모임을 먼저 선택하세요"); return; }
+  const name=(prompt("추가할 게스트 이름 (서헬모 등)")||"").trim();
+  if(!name) return;
+  const ref=doc(db,"gbd_meetings",currentMeetingId);
+  let dup=false;
+  await runTransaction(db,async t=>{
+    const snap=await t.get(ref); if(!snap.exists()) return;
+    const data=snap.data(); const guests=[...(data.guests||[])];
+    if(guests.some(g=>g&&g.name===name)){ dup=true; return; }
+    guests.push({name,late:false,t:Date.now()});
+    t.update(ref,{guests});
+  });
+  if(dup) alert(name+"님은 이미 게스트에 있어요!");
+}
+window.addGuestByAdmin=addGuestByAdmin;
 
 async function removeGuest(gi){
   if(!confirm("이 게스트를 삭제할까요?")) return;
