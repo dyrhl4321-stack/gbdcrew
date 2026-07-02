@@ -760,19 +760,19 @@ function renderCurrentMeeting(){
     card.querySelector(`#pb${i}`).onclick=()=>toggle(i,"pay");
     list.appendChild(card);
   });
-  // 게스트(서헬모 등) 목록
+  // 게스트(서헬모 등): 메인엔 '게스트'로 분류해 표시만(추가/삭제는 편집 모달에서). 0명이면 숨김.
   const guests=m.guests||[];
   const gwrap=document.getElementById("guest-list-wrap");
   if(gwrap){
-    gwrap.style.display="block";
-    gwrap.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'+
-      '<span style="font-size:11px;color:#ffa500;letter-spacing:.08em;">— 게스트 '+guests.length+'명</span>'+
-      '<button onclick="addGuestByAdmin()" style="background:transparent;border:1px solid #ffa500;color:#ffa500;font-size:10px;padding:5px 11px;cursor:pointer;font-family:inherit;border-radius:6px;">+ 게스트 추가</button></div>'+
-      guests.map((g,gi)=>'<div style="display:flex;align-items:center;gap:8px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:6px;">'+
-        '<span style="color:#fff;font-size:13px;">'+((g&&g.name)||'')+'</span>'+
-        '<span style="color:#ffa500;font-size:10px;">게스트</span>'+
-        ((g&&g.late)?'<span style="color:#ffa500;font-size:11px;">🕐 지각</span>':'')+
-        '<button onclick="removeGuest('+gi+')" style="margin-left:auto;background:transparent;border:1px solid #2a2a2a;color:#555;font-size:10px;padding:5px 9px;cursor:pointer;font-family:inherit;">삭제</button></div>').join("");
+    if(guests.length){
+      gwrap.style.display="block";
+      gwrap.innerHTML='<div style="font-size:11px;color:#ffa500;letter-spacing:.08em;margin-bottom:8px;">— 게스트 '+guests.length+'명</div>'+
+        guests.map(g=>'<div style="display:flex;align-items:center;gap:8px;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px;margin-bottom:6px;">'+
+          '<span style="color:#fff;font-size:13px;">'+((g&&g.name)||'')+'</span>'+
+          '<span style="color:#ffa500;font-size:9px;border:1px solid #ffa500;border-radius:4px;padding:1px 5px;letter-spacing:.05em;">게스트</span>'+
+          ((g&&g.late)?'<span style="color:#ffa500;font-size:11px;margin-left:auto;">🕐 지각</span>':'')+
+          '</div>').join("");
+    } else { gwrap.style.display="none"; gwrap.innerHTML=""; }
   }
 }
 
