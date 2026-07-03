@@ -518,6 +518,16 @@ function guestStat(m){
 let selectedCheckinMeetingId=null;
 const params = new URLSearchParams(window.location.search);
 const mode = params.get("mode");
+const preview = params.get("preview");   // 가이드용 라이브 미리보기: "entry"(게스트로 출석 버튼 화면) | "guest"(닉네임 선택 화면)
+// 가이드 미리보기: 다가오는(오늘 이후) 모임 중 가장 가까운 것, 없으면 최신
+function pickPreviewMeeting(){
+  const dated=meetings.filter(m=>m.date&&!isNaN(new Date(m.date)));
+  if(!dated.length) return null;
+  const t0=new Date(); t0.setHours(0,0,0,0);
+  const key=m=>{const d=new Date(m.date);d.setHours(0,0,0,0);return d.getTime();};
+  const up=dated.filter(m=>key(m)>=t0.getTime()).sort((a,b)=>key(a)-key(b));
+  return up.length?up[0]:dated.sort((a,b)=>key(b)-key(a))[0];
+}
 
 function showPage(id){
   ["page-main","page-checkin","page-done","page-login","page-stats","page-blocked"].forEach(p=>document.getElementById(p).classList.remove("active"));
@@ -608,6 +618,14 @@ onSnapshot(q, snap=>{
   meetings=snap.docs.map(d=>({id:d.id,...d.data()}));
   setSyncBar("synced","● 실시간 연동 중");
   if(mode==="checkin"){
+    if(preview){
+      // 가이드용 라이브 미리보기: 다가오는 모임 자동 선택 후 지정 화면 표시
+      showPage("page-checkin");
+      const pm=pickPreviewMeeting();
+      if(pm){ selectedCheckinMeetingId=pm.id; if(preview==="guest") showGuestCheckin(); else showCheckinNames(pm.id); }
+      else renderCheckinMeetings();
+      return;
+    }
     // 사용자가 비밀번호 입력·이름 선택·완료·차단 화면 등 진행 중이면 방해하지 않음 (메모리 meetings만 갱신)
     const inFlow =
       document.getElementById("page-blocked").classList.contains("active") ||
