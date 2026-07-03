@@ -622,7 +622,7 @@ onSnapshot(q, snap=>{
       // 가이드용 라이브 미리보기: 다가오는 모임 자동 선택 후 지정 화면 표시
       showPage("page-checkin");
       const pm=pickPreviewMeeting();
-      if(pm){ selectedCheckinMeetingId=pm.id; if(preview==="guest") showGuestCheckin(); else showCheckinNames(pm.id); }
+      if(pm){ selectedCheckinMeetingId=pm.id; if(preview==="guest") showGuestCheckin(); else selectCheckinMeeting(pm.id); }  // entry: 비번 있으면 password-section(게스트로 출석 버튼 포함) 노출
       else renderCheckinMeetings();
       return;
     }
