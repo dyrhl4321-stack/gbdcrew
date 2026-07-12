@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>근방단 회원 명부</title>
+<style>
+  :root { --bg:#0f1116; --card:#181b23; --line:#2a2f3d; --txt:#e6e9f0; --dim:#8b93a7;
+          --chick:#ffd83d; --kick:#ff5b5b; --ok:#5ac97a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:14px/1.5 system-ui,"Malgun Gothic",sans-serif; }
+  header { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:center; }
+  h1 { font-size:18px; margin:0; }
+  main { padding:20px; }
+  #gate { max-width:320px; margin:80px auto; text-align:center; }
+  input, select, button { background:#11141b; color:var(--txt); border:1px solid var(--line);
+                          border-radius:6px; padding:7px 10px; font:inherit; }
+  button { cursor:pointer; }
+  button.primary { background:#3d7eff; border-color:#3d7eff; color:#fff; }
+  .sum { display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+  .sum div { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 14px; }
+  .sum b { font-size:20px; display:block; }
+  .bar { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; align-items:center; }
+  .bar button.on { background:#2b3350; }
+  table { width:100%; border-collapse:collapse; background:var(--card);
+          border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  th, td { padding:9px 10px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }
+  th { color:var(--dim); font-weight:600; font-size:12px; }
+  tr.kick { background:rgba(255,91,91,.09); }
+  tr.removed { opacity:.42; }
+  .badge { border-radius:999px; padding:2px 8px; font-size:11px; font-weight:700; }
+  .badge.chick { background:var(--chick); color:#3a2c00; }
+  .badge.old { background:#2b3350; color:#b7c0d4; }
+  .v.kick { color:var(--kick); font-weight:700; }
+  .v.ok { color:var(--ok); }
+  .v.grace, .v.ambiguous, .v.removed { color:var(--dim); }
+  .hint { color:var(--dim); font-size:12px; }
+  #orphans { margin-top:18px; }
+  #orphans span { display:inline-block; background:#3a2c00; color:var(--chick);
+                  border-radius:6px; padding:3px 8px; margin:3px 4px 0 0; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <h1>근방단 회원 명부</h1>
+  <p class="hint">운영진 전용</p>
+  <input id="pin" type="password" inputmode="numeric" placeholder="비밀번호" autocomplete="off">
+  <button id="enter" class="primary">입장</button>
+  <p id="pin-err" class="hint" style="color:#ff5b5b"></p>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <h1>근방단 회원 명부</h1>
+    <span id="asof" class="hint"></span>
+  </header>
+  <main>
+    <div class="sum">
+      <div><b id="s-total">0</b>전체</div>
+      <div><b id="s-chick">0</b>병아리</div>
+      <div><b id="s-kick">0</b>퇴출 대상</div>
+      <div><b id="s-removed">0</b>제외됨</div>
+    </div>
+
+    <div class="bar">
+      <button class="flt on" data-f="all">전체</button>
+      <button class="flt" data-f="new">🐤 병아리</button>
+      <button class="flt" data-f="old">기존</button>
+      <button class="flt" data-f="kick">퇴출 대상</button>
+      <button class="flt" data-f="removed">제외됨</button>
+      <input id="q" placeholder="이름·닉네임 검색" style="margin-left:auto">
+      <button id="add">＋ 회원 추가</button>
+      <button id="seed">초기 데이터 넣기</button>
+    </div>
+
+    <table>
+      <thead><tr>
+        <th>이름</th><th>닉네임</th><th>출생</th><th>지역</th><th>구분</th>
+        <th>가입일</th><th>출석</th><th>마지막 출석</th><th>최근 2개월</th><th>판정</th><th></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <div id="orphans"></div>
+  </main>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, doc, getDocs, setDoc, updateDoc }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { computeAttendance, duplicateNames, verdict, graduatedType } from "./gbd_members_logic.js";
+import { SEED } from "./gbd_members_seed.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBAdgC1pYJ9bAEWGTO_UoP4C84Q1d_jVtw",
+  authDomain: "gbdcrewcheck-2af48.firebaseapp.com",
+  projectId: "gbdcrewcheck-2af48",
+  storageBucket: "gbdcrewcheck-2af48.firebasestorage.app",
+  messagingSenderId: "57726309639",
+  appId: "1:57726309639:web:9bb1edc21cb48fdd49a1a2"
+};
+const db = getFirestore(initializeApp(firebaseConfig));
+const $ = (s) => document.querySelector(s);
+
+const state = { members: [], attendance: {}, dupSet: new Set(), filter: "all", q: "" };
+const today = new Date();
+
+/* ---------------- 비번 게이트 (index.html 과 같은 방식) ---------------- */
+$("#enter").onclick = () => {
+  if ($("#pin").value !== "5252") { $("#pin-err").textContent = "비밀번호가 틀렸어요"; $("#pin").value = ""; return; }
+  $("#gate").hidden = true; $("#app").hidden = false;
+  load();
+};
+$("#pin").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#enter").click(); });
+
+/* ---------------- 읽기 ---------------- */
+async function load() {
+  const [memSnap, meetSnap, arcSnap] = await Promise.all([
+    getDocs(collection(db, "gbd_members")),
+    getDocs(collection(db, "gbd_meetings")),
+    getDocs(collection(db, "gbd_archive")),
+  ]);
+  state.members = memSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const meetings = [...meetSnap.docs, ...arcSnap.docs].map((d) => d.data());
+  state.attendance = computeAttendance(meetings, today);
+  state.dupSet = duplicateNames(state.members);
+  state.meetingNames = new Set(meetings.flatMap((m) => m.members || []));
+  $("#asof").textContent = `기준일 ${today.toISOString().slice(0, 10)} · 모임 ${meetings.length}건`;
+  render();
+}
+
+/* ---------------- 렌더 ---------------- */
+function render() {
+  const rows = [];
+  let nChick = 0, nKick = 0, nRemoved = 0;
+
+  const sorted = [...state.members].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  for (const m of sorted) {
+    const att = state.attendance[m.name] || { attendCount: 0, lastAttendDate: null, recent2mo: 0 };
+    const v = verdict(m, att, today, state.dupSet);
+    const type = graduatedType(m, att);
+
+    if (v.code === "removed") nRemoved++;
+    else if (type === "new") nChick++;
+    if (v.code === "kick") nKick++;
+
+    if (!passFilter(m, type, v)) continue;
+    rows.push(rowHtml(m, att, v, type));
+  }
+
+  $("#rows").innerHTML = rows.join("") || `<tr><td colspan="11" class="hint">해당하는 회원이 없습니다.</td></tr>`;
+  $("#s-total").textContent = state.members.length;
+  $("#s-chick").textContent = nChick;
+  $("#s-kick").textContent = nKick;
+  $("#s-removed").textContent = nRemoved;
+  renderOrphans();
+}
+
+function passFilter(m, type, v) {
+  const f = state.filter;
+  const q = state.q.trim();
+  if (q && !(m.name.includes(q) || (m.nickname || "").includes(q))) return false;
+  if (f === "all") return v.code !== "removed";
+  if (f === "removed") return v.code === "removed";
+  if (f === "kick") return v.code === "kick";
+  if (f === "new") return v.code !== "removed" && type === "new";
+  if (f === "old") return v.code !== "removed" && type === "old";
+  return true;
+}
+
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function rowHtml(m, att, v, type) {
+  const badge = type === "new"
+    ? `<span class="badge chick">🐤 병아리</span>`
+    : `<span class="badge old">기존</span>`;
+  const act = m.status === "removed"
+    ? `<button data-restore="${esc(m.id)}">복원</button>`
+    : `<button data-remove="${esc(m.id)}">제외</button>`;
+  return `<tr class="${v.code === "kick" ? "kick" : ""} ${m.status === "removed" ? "removed" : ""}">
+    <td>${esc(m.name)}</td>
+    <td><input data-nick="${esc(m.id)}" value="${esc(m.nickname)}" size="8"></td>
+    <td>${esc(m.birth)}</td><td>${esc(m.region)}</td><td>${badge}</td>
+    <td>${esc(m.joinDate) || "—"}</td>
+    <td>${att.attendCount}</td>
+    <td>${esc(att.lastAttendDate) || "—"}</td>
+    <td>${att.recent2mo}</td>
+    <td class="v ${v.code}">${esc(v.label)}</td>
+    <td>${act}</td>
+  </tr>`;
+}
+
+function renderOrphans() {
+  const known = new Set(state.members.map((m) => m.name));
+  const orphans = [...(state.meetingNames || [])].filter((n) => !known.has(n)).sort();
+  $("#orphans").innerHTML = orphans.length
+    ? `<p class="hint">모임 명단에는 있는데 명부에 없는 이름 ${orphans.length}명 — 클릭하면 추가합니다.</p>` +
+      orphans.map((n) => `<span data-orphan="${esc(n)}">${esc(n)}</span>`).join("")
+    : `<p class="hint">모든 모임 참석자가 명부에 있습니다.</p>`;
+}
+
+/* ---------------- 필터·검색 이벤트 ---------------- */
+document.querySelectorAll(".flt").forEach((b) => b.onclick = () => {
+  document.querySelectorAll(".flt").forEach((x) => x.classList.remove("on"));
+  b.classList.add("on"); state.filter = b.dataset.f; render();
+});
+$("#q").oninput = (e) => { state.q = e.target.value; render(); };
+
+/* ---------------- 쓰기 ---------------- */
+const now = () => new Date().toISOString();
+
+async function upsert(m) {
+  await setDoc(doc(db, "gbd_members", m.name), { ...m, updatedAt: now() }, { merge: true });
+}
+
+/* 시딩: 이미 있는 문서는 건드리지 않는다. 덮어쓰기 금지. */
+$("#seed").onclick = async () => {
+  const have = new Set(state.members.map((m) => m.name));
+  const todo = SEED.filter((m) => !have.has(m.name));
+  if (!todo.length) { alert("이미 모두 들어 있습니다."); return; }
+  if (!confirm(`${todo.length}명을 넣습니다. 기존 문서는 건드리지 않습니다.`)) return;
+  for (const m of todo) {
+    await setDoc(doc(db, "gbd_members", m.name), { ...m, status: "active", memo: "", createdAt: now(), updatedAt: now() });
+  }
+  alert(`${todo.length}명 추가 완료`);
+  await load();
+};
+
+/* 제외 / 복원 — 삭제하지 않는다 */
+$("#rows").addEventListener("click", async (e) => {
+  const rm = e.target.dataset.remove, rs = e.target.dataset.restore;
+  if (rm) {
+    if (!confirm(`${rm} 님을 명부에서 제외합니다. 기록은 남습니다.`)) return;
+    await updateDoc(doc(db, "gbd_members", rm), { status: "removed", updatedAt: now() });
+    await load();
+  } else if (rs) {
+    await updateDoc(doc(db, "gbd_members", rs), { status: "active", updatedAt: now() });
+    await load();
+  }
+});
+
+/* 닉네임 인라인 저장 */
+$("#rows").addEventListener("change", async (e) => {
+  const id = e.target.dataset.nick;
+  if (!id) return;
+  await updateDoc(doc(db, "gbd_members", id), { nickname: e.target.value.trim(), updatedAt: now() });
+  const m = state.members.find((x) => x.id === id);
+  if (m) m.nickname = e.target.value.trim();
+});
+
+/* 회원 추가 */
+async function addMember(preName) {
+  const name = (preName ?? prompt("실명"))?.trim();
+  if (!name) return;
+  if (state.members.some((m) => m.name === name)) { alert("이미 명부에 있습니다."); return; }
+  const birth = Number(prompt("출생년도 (예: 1994)") || 0) || null;
+  const region = (prompt("지역 (예: 송파구)") || "").trim();
+  const joinDate = (prompt("병아리면 가입일 YYYY-MM-DD, 기존 회원이면 비워두세요") || "").trim() || null;
+  if (joinDate && !/^\d{4}-\d{2}-\d{2}$/.test(joinDate)) { alert("가입일 형식이 잘못됐습니다."); return; }
+  await upsert({ name, nickname: "", birth, region, type: joinDate ? "new" : "old",
+                 joinDate, status: "active", memo: "", createdAt: now() });
+  await load();
+}
+$("#add").onclick = () => addMember();
+$("#orphans").addEventListener("click", (e) => {
+  if (e.target.dataset.orphan) addMember(e.target.dataset.orphan);
+});
+</script>
+</body>
+</html>
