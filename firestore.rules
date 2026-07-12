@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /gbd_meetings/{doc} { allow read, write: if true; }
+    match /gbd_archive/{doc}  { allow read, write: if true; }
+    match /gbd_stats/{doc}    { allow read, write: if true; }
+    match /gbd_members/{doc}  { allow read, write: if true; }
+  }
+}
