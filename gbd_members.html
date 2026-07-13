@@ -26,6 +26,8 @@
           border:1px solid var(--line); border-radius:8px; overflow:hidden; }
   th, td { padding:9px 10px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }
   th { color:var(--dim); font-weight:600; font-size:12px; }
+  td input, td select { padding:4px 6px; border-radius:5px; max-width:130px; }
+  td input[type=date] { width:130px; }
   tr.kick { background:rgba(255,91,91,.09); }
   tr.removed { opacity:.42; }
   .badge { border-radius:999px; padding:2px 8px; font-size:11px; font-weight:700; }
@@ -77,7 +79,7 @@
     <table>
       <thead><tr>
         <th>이름</th><th>닉네임</th><th>출생</th><th>지역</th><th>구분</th>
-        <th>가입일</th><th>출석</th><th>마지막 출석</th><th>최근 2개월</th><th>판정</th><th></th>
+        <th>가입일</th><th>출석</th><th>마지막 출석</th><th>벙 출석일</th><th>최근 2개월</th><th>판정</th><th></th>
       </tr></thead>
       <tbody id="rows"></tbody>
     </table>
@@ -88,9 +90,9 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, doc, getDocs, setDoc, updateDoc }
+import { getFirestore, collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { computeAttendance, duplicateNames, verdict, graduatedType } from "./gbd_members_logic.js";
+import { computeAttendance, duplicateNames, verdict, graduatedType, applyManualAttendance } from "./gbd_members_logic.js";
 import { SEED } from "./gbd_members_seed.js";
 
 const firebaseConfig = {
@@ -138,7 +140,8 @@ function render() {
 
   const sorted = [...state.members].sort((a, b) => a.name.localeCompare(b.name, "ko"));
   for (const m of sorted) {
-    const att = state.attendance[m.name] || { attendCount: 0, lastAttendDate: null, recent2mo: 0 };
+    const base = state.attendance[m.name] || { attendCount: 0, lastAttendDate: null, recent2mo: 0 };
+    const att = applyManualAttendance(base, m.bungDate, today);   // 벙 출석 얹기
     const v = verdict(m, att, today, state.dupSet);
     const type = graduatedType(m, att);
 
@@ -150,7 +153,7 @@ function render() {
     rows.push(rowHtml(m, att, v, type));
   }
 
-  $("#rows").innerHTML = rows.join("") || `<tr><td colspan="11" class="hint">해당하는 회원이 없습니다.</td></tr>`;
+  $("#rows").innerHTML = rows.join("") || `<tr><td colspan="12" class="hint">해당하는 회원이 없습니다.</td></tr>`;
   $("#s-total").textContent = state.members.length;
   $("#s-chick").textContent = nChick;
   $("#s-kick").textContent = nKick;
@@ -173,19 +176,23 @@ function passFilter(m, type, v) {
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 function rowHtml(m, att, v, type) {
-  const badge = type === "new"
-    ? `<span class="badge chick">🐤 병아리</span>`
-    : `<span class="badge old">기존</span>`;
+  const id = esc(m.id);
+  const typeSel = `<select data-edit="type" data-id="${id}">
+      <option value="new"${m.type === "new" ? " selected" : ""}>🐤 병아리</option>
+      <option value="old"${m.type !== "new" ? " selected" : ""}>기존</option></select>`;
   const act = m.status === "removed"
-    ? `<button data-restore="${esc(m.id)}">복원</button>`
-    : `<button data-remove="${esc(m.id)}">제외</button>`;
+    ? `<button data-restore="${id}">복원</button>`
+    : `<button data-remove="${id}">제외</button>`;
   return `<tr class="${v.code === "kick" ? "kick" : ""} ${m.status === "removed" ? "removed" : ""}">
-    <td>${esc(m.name)}</td>
-    <td><input data-nick="${esc(m.id)}" value="${esc(m.nickname)}" size="8"></td>
-    <td>${esc(m.birth)}</td><td>${esc(m.region)}</td><td>${badge}</td>
-    <td>${esc(m.joinDate) || "—"}</td>
+    <td><input data-rename data-id="${id}" value="${esc(m.name)}" size="6"></td>
+    <td><input data-edit="nickname" data-id="${id}" value="${esc(m.nickname)}" size="7"></td>
+    <td><input data-edit="birth" data-id="${id}" value="${esc(m.birth)}" size="4" inputmode="numeric"></td>
+    <td><input data-edit="region" data-id="${id}" value="${esc(m.region)}" size="6"></td>
+    <td>${typeSel}</td>
+    <td><input type="date" data-edit="joinDate" data-id="${id}" value="${esc(m.joinDate)}"></td>
     <td>${att.attendCount}</td>
     <td>${esc(att.lastAttendDate) || "—"}</td>
+    <td><input type="date" data-edit="bungDate" data-id="${id}" value="${esc(m.bungDate)}"></td>
     <td>${att.recent2mo}</td>
     <td class="v ${v.code}">${esc(v.label)}</td>
     <td>${act}</td>
@@ -241,14 +248,37 @@ $("#rows").addEventListener("click", async (e) => {
   }
 });
 
-/* 닉네임 인라인 저장 */
+/* 인라인 편집 — 모든 칸 즉시 저장, 저장 후 판정 재계산 */
 $("#rows").addEventListener("change", async (e) => {
-  const id = e.target.dataset.nick;
+  const el = e.target;
+  const id = el.dataset.id;
   if (!id) return;
-  await updateDoc(doc(db, "gbd_members", id), { nickname: e.target.value.trim(), updatedAt: now() });
-  const m = state.members.find((x) => x.id === id);
-  if (m) m.nickname = e.target.value.trim();
+
+  if (el.hasAttribute("data-rename")) { await renameMember(id, el.value.trim(), el); return; }
+
+  const field = el.dataset.edit;
+  if (!field) return;
+  let val = el.value.trim();
+  if (field === "birth") val = Number(val) || null;
+  else if (field === "joinDate" || field === "bungDate") val = val || null;   // 빈 날짜 → null
+  await updateDoc(doc(db, "gbd_members", id), { [field]: val, updatedAt: now() });
+  await load();   // 최근 2개월·판정·색 다시 계산
 });
+
+/* 이름(실명) 변경 = 문서 리네임. 과거 앱 출석은 옛 이름에 남으므로 경고한다. */
+async function renameMember(oldId, newName, inputEl) {
+  const revert = () => { if (inputEl) inputEl.value = oldId; };
+  if (!newName || newName === oldId) { revert(); return; }
+  if (state.members.some((m) => m.id === newName)) { alert("이미 그 이름의 회원이 있습니다."); revert(); return; }
+  if (!confirm(`이름을 "${oldId}" → "${newName}" 으로 바꿉니다.\n\n주의: 과거 앱 출석 기록은 옛 이름에 남아 새 이름과 매칭되지 않습니다(출석이 0회로 보일 수 있음). 필요하면 벙 출석일로 보정하세요.\n\n계속할까요?`)) {
+    revert(); return;
+  }
+  const snap = await getDoc(doc(db, "gbd_members", oldId));
+  const data = snap.exists() ? snap.data() : {};
+  await setDoc(doc(db, "gbd_members", newName), { ...data, name: newName, updatedAt: now() });
+  await deleteDoc(doc(db, "gbd_members", oldId));
+  await load();
+}
 
 /* 회원 추가 */
 async function addMember(preName) {
@@ -260,7 +290,7 @@ async function addMember(preName) {
   const joinDate = (prompt("병아리면 가입일 YYYY-MM-DD, 기존 회원이면 비워두세요") || "").trim() || null;
   if (joinDate && !/^\d{4}-\d{2}-\d{2}$/.test(joinDate)) { alert("가입일 형식이 잘못됐습니다."); return; }
   await upsert({ name, nickname: "", birth, region, type: joinDate ? "new" : "old",
-                 joinDate, status: "active", memo: "", createdAt: now() });
+                 joinDate, bungDate: null, status: "active", memo: "", createdAt: now() });
   await load();
 }
 $("#add").onclick = () => addMember();
