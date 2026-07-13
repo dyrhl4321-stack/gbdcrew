@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   computeAttendance, parseYmd,
   duplicateNames, verdict, graduatedType, addMonths,
+  applyManualAttendance,
 } from "../gbd_members_logic.js";
 
 const today = parseYmd("2026-07-10");
@@ -108,4 +109,49 @@ test("졸업한 병아리는 기존 규칙으로 판정된다", () => {
   const m = { name: "A", type: "new", joinDate: "2026-05-01", status: "active" };
   const att = { attendCount: 1, lastAttendDate: "2026-05-02", recent2mo: 0 };
   assert.equal(verdict(m, att, today, new Set()).code, "kick");  // 최근 2개월 0회
+});
+
+/* ---- 벙(오프앱) 출석 수동 반영 ---- */
+
+test("벙 날짜가 없으면 원본 값 그대로, 다른 객체(불변)", () => {
+  const r = applyManualAttendance(EMPTY, null, today);
+  assert.deepEqual(r, EMPTY);
+  assert.notEqual(r, EMPTY);           // 입력을 변형하지 않는다
+});
+
+test("미래 벙 날짜는 무시한다", () => {
+  const r = applyManualAttendance(EMPTY, "2026-08-01", today);
+  assert.deepEqual(r, EMPTY);
+});
+
+test("이번 달 벙 → attendCount·recent2mo 각각 +1", () => {
+  const r = applyManualAttendance(EMPTY, "2026-07-05", today);
+  assert.equal(r.attendCount, 1);
+  assert.equal(r.recent2mo, 1);
+  assert.equal(r.lastAttendDate, "2026-07-05");
+});
+
+test("지난 달 벙도 recent2mo 에 든다", () => {
+  const r = applyManualAttendance(EMPTY, "2026-06-15", today);
+  assert.equal(r.recent2mo, 1);
+});
+
+test("두 달 밖 벙 → attendCount 만 +1, recent2mo 불변", () => {
+  const r = applyManualAttendance(EMPTY, "2026-04-20", today);
+  assert.equal(r.attendCount, 1);
+  assert.equal(r.recent2mo, 0);
+  assert.equal(r.lastAttendDate, "2026-04-20");
+});
+
+test("lastAttendDate 는 앱 출석과 벙 중 더 최근", () => {
+  const app = { attendCount: 2, lastAttendDate: "2026-07-01", recent2mo: 1 };
+  assert.equal(applyManualAttendance(app, "2026-07-08", today).lastAttendDate, "2026-07-08"); // 벙이 최근
+  assert.equal(applyManualAttendance(app, "2026-06-10", today).lastAttendDate, "2026-07-01"); // 앱이 최근
+});
+
+test("병아리도 벙 한 번이면 졸업하고 퇴출 아님", () => {
+  const m = { name: "A", type: "new", joinDate: "2026-05-01", status: "active" };
+  const att = applyManualAttendance(EMPTY, "2026-07-05", today);
+  assert.equal(graduatedType(m, att), "old");
+  assert.equal(verdict(m, att, today, new Set()).code, "ok");
 });

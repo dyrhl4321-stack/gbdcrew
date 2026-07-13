@@ -39,6 +39,20 @@ export function computeAttendance(meetings, today) {
   return out;
 }
 
+/** 벙(오프앱) 출석을 집계 결과에 얹는다. computeAttendance 는 그대로 두고 한 명분 att 만 보정.
+ * 벙은 출첵앱을 안 거쳐 모임 문서에 없으므로, 최근 벙 날짜 하나를 "출석 1회"로 더한다.
+ * 입력 att 는 변형하지 않고 새 객체를 반환한다. 미래 날짜는 아직 안 일어난 벙이라 무시한다. */
+export function applyManualAttendance(att, bungDate, today) {
+  const a = { ...(att || { attendCount: 0, lastAttendDate: null, recent2mo: 0 }) };
+  if (!bungDate) return a;
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if (parseYmd(bungDate) > t) return a;                 // 미래 벙은 세지 않는다
+  a.attendCount += 1;                                   // 병아리 졸업(attendCount>0)에도 기여
+  if (recentMonths(t).includes(bungDate.slice(0, 7))) a.recent2mo += 1;
+  if (!a.lastAttendDate || bungDate > a.lastAttendDate) a.lastAttendDate = bungDate;
+  return a;
+}
+
 /** 이름이 두 번 이상 나오는 회원. 출석은 이름으로만 매칭되므로 자동 판정할 수 없다. */
 export function duplicateNames(members) {
   const seen = new Map();
