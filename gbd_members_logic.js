@@ -39,6 +39,21 @@ export function computeAttendance(meetings, today) {
   return out;
 }
 
+/** 운영 역할 기본값. 저장된 role 이 없는 회원에게 이 표를 적용한다. */
+export const DEFAULT_ROLES = {
+  "김현수": "leader",
+  "최다윤": "staff", "김준성": "staff", "유사랑": "staff",
+  "함성훈": "staff", "안효정": "staff", "윤득원": "staff",
+};
+
+/** 실효 역할: 저장된 role("leader"|"staff"|"none")이 우선, 없으면 기본값, 그래도 없으면 "none".
+ * 저장값이 기본값을 이기므로 기본 운영진을 일반("none")으로 강등하거나 누구든 승격할 수 있다. */
+export function effectiveRole(member) {
+  const r = member && member.role;
+  if (r === "leader" || r === "staff" || r === "none") return r;
+  return (member && DEFAULT_ROLES[member.name]) || "none";
+}
+
 /** 벙(오프앱) 출석을 집계 결과에 얹는다. computeAttendance 는 그대로 두고 한 명분 att 만 보정.
  * 벙은 출첵앱을 안 거쳐 모임 문서에 없으므로, 최근 벙 날짜 하나를 "출석 1회"로 더한다.
  * 입력 att 는 변형하지 않고 새 객체를 반환한다. 미래 날짜는 아직 안 일어난 벙이라 무시한다. */

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   computeAttendance, parseYmd,
   duplicateNames, verdict, graduatedType, addMonths,
-  applyManualAttendance,
+  applyManualAttendance, effectiveRole,
 } from "../gbd_members_logic.js";
 
 const today = parseYmd("2026-07-10");
@@ -154,4 +154,18 @@ test("병아리도 벙 한 번이면 졸업하고 퇴출 아님", () => {
   const att = applyManualAttendance(EMPTY, "2026-07-05", today);
   assert.equal(graduatedType(m, att), "old");
   assert.equal(verdict(m, att, today, new Set()).code, "ok");
+});
+
+/* ---- 운영 역할 ---- */
+
+test("기본 역할: 김현수 모임장, 최다윤 운영진, 그 외 일반", () => {
+  assert.equal(effectiveRole({ name: "김현수" }), "leader");
+  assert.equal(effectiveRole({ name: "최다윤" }), "staff");
+  assert.equal(effectiveRole({ name: "윤득원" }), "staff");
+  assert.equal(effectiveRole({ name: "홍길동" }), "none");
+});
+
+test("저장된 역할이 기본값을 이긴다 (강등·승격)", () => {
+  assert.equal(effectiveRole({ name: "김현수", role: "none" }), "none");   // 강등
+  assert.equal(effectiveRole({ name: "홍길동", role: "leader" }), "leader"); // 승격
 });

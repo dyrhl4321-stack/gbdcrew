@@ -33,6 +33,8 @@
   .badge { border-radius:999px; padding:2px 8px; font-size:11px; font-weight:700; }
   .badge.chick { background:var(--chick); color:#3a2c00; }
   .badge.old { background:#2b3350; color:#b7c0d4; }
+  .badge.leader { background:#ffb020; color:#3a2600; }
+  .badge.staff { background:#3d7eff; color:#fff; }
   .v.kick { color:var(--kick); font-weight:700; }
   .v.ok { color:var(--ok); }
   .v.grace, .v.ambiguous, .v.removed { color:var(--dim); }
@@ -78,7 +80,7 @@
 
     <table>
       <thead><tr>
-        <th>이름</th><th>닉네임</th><th>출생</th><th>지역</th><th>구분</th>
+        <th>이름</th><th>닉네임</th><th>출생</th><th>지역</th><th>구분</th><th>역할</th>
         <th>가입일</th><th>출석</th><th>마지막 출석</th><th>벙 출석일</th><th>최근 2개월</th><th>판정</th><th></th>
       </tr></thead>
       <tbody id="rows"></tbody>
@@ -92,7 +94,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { computeAttendance, duplicateNames, verdict, graduatedType, applyManualAttendance } from "./gbd_members_logic.js";
+import { computeAttendance, duplicateNames, verdict, graduatedType, applyManualAttendance, effectiveRole } from "./gbd_members_logic.js";
 import { SEED } from "./gbd_members_seed.js";
 
 const firebaseConfig = {
@@ -153,7 +155,7 @@ function render() {
     rows.push(rowHtml(m, att, v, type));
   }
 
-  $("#rows").innerHTML = rows.join("") || `<tr><td colspan="12" class="hint">해당하는 회원이 없습니다.</td></tr>`;
+  $("#rows").innerHTML = rows.join("") || `<tr><td colspan="13" class="hint">해당하는 회원이 없습니다.</td></tr>`;
   $("#s-total").textContent = state.members.length;
   $("#s-chick").textContent = nChick;
   $("#s-kick").textContent = nKick;
@@ -180,15 +182,23 @@ function rowHtml(m, att, v, type) {
   const typeSel = `<select data-edit="type" data-id="${id}">
       <option value="new"${m.type === "new" ? " selected" : ""}>🐤 병아리</option>
       <option value="old"${m.type !== "new" ? " selected" : ""}>기존</option></select>`;
+  const role = effectiveRole(m);
+  const roleBadge = role === "leader" ? `<span class="badge leader">모임장</span> `
+                  : role === "staff" ? `<span class="badge staff">운영진</span> ` : "";
+  const roleSel = `<select data-edit="role" data-id="${id}">
+      <option value="none"${role === "none" ? " selected" : ""}>일반</option>
+      <option value="staff"${role === "staff" ? " selected" : ""}>운영진</option>
+      <option value="leader"${role === "leader" ? " selected" : ""}>모임장</option></select>`;
   const act = m.status === "removed"
     ? `<button data-restore="${id}">복원</button>`
     : `<button data-remove="${id}">제외</button>`;
   return `<tr class="${v.code === "kick" ? "kick" : ""} ${m.status === "removed" ? "removed" : ""}">
-    <td><input data-rename data-id="${id}" value="${esc(m.name)}" size="6"></td>
+    <td>${roleBadge}<input data-rename data-id="${id}" value="${esc(m.name)}" size="6"></td>
     <td><input data-edit="nickname" data-id="${id}" value="${esc(m.nickname)}" size="7"></td>
     <td><input data-edit="birth" data-id="${id}" value="${esc(m.birth)}" size="4" inputmode="numeric"></td>
     <td><input data-edit="region" data-id="${id}" value="${esc(m.region)}" size="6"></td>
     <td>${typeSel}</td>
+    <td>${roleSel}</td>
     <td><input type="date" data-edit="joinDate" data-id="${id}" value="${esc(m.joinDate)}"></td>
     <td>${att.attendCount}</td>
     <td>${esc(att.lastAttendDate) || "—"}</td>
