@@ -180,7 +180,7 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
 .tr-warn td:first-child{color:#ffcc88!important;}
 
 /* 모달 */
-#meeting-modal{display:none;position:fixed;inset:0;background:#0a0a0a;z-index:100;overflow-y:auto;max-width:480px;margin:0 auto;}
+#meeting-modal{display:none;position:fixed;inset:0;background:#0a0a0a;z-index:300;overflow-y:auto;max-width:480px;margin:0 auto;}  /* 아카이브 모달(200) 위에서 열려야 지난 모임 전체 편집이 보인다 */
 #meeting-modal.open{display:block;}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px;border-bottom:1px solid #1e1e1e;position:sticky;top:0;background:#0a0a0a;}
 .modal-cancel{background:transparent;border:1px solid #222;color:#555;font-size:11px;padding:7px 14px;cursor:pointer;font-family:inherit;}
@@ -519,6 +519,7 @@ const LATE_MINUTES = 5; // 지각 기준: 시작 후 5분
 
 let meetings=[], archives=[], memberStats={}, currentMeetingId=null, currentArchiveEditId=null;
 let editMeetingId=null, selectedType="jeongmo", editMembers=[], editGuests=[], editGuestGroup="";
+let editMeetingColl="gbd_meetings";   // 편집 중인 모임이 어느 컬렉션 소속인지 — 지난 모임은 gbd_archive 로 되돌려 써야 한다
 // 게스트 헬퍼: guests=닉네임 배열(로스터), guestStatus=[{attend,late}] 평행. 구버전([{name,late,t}])도 정규화.
 function guestRoster(m){ return ((m&&m.guests)||[]).map(g=> typeof g==='string'? g : ((g&&g.name)||"")); }
 function guestStat(m){
@@ -1134,6 +1135,13 @@ window.openArchiveEdit=function(id){
 function renderArchiveModalMembers(m){
   const body=document.getElementById("archive-modal-body");
   body.innerHTML="";
+  const info=document.getElementById("archive-modal-info");
+  if(info){
+    const amt=gongeumAmt(m);
+    info.innerHTML=`${m.startTime?"⏰ "+m.startTime+" · ":""}${gongeumOn(m)
+      ? `💰 공금 적립 ON · 선입금 ${(m.fee||0).toLocaleString()}원 → <span style="color:#c8f542;">+${amt.toLocaleString()}원</span>`
+      : `공금 미적립 모임`} <span style="color:#333;">— 바꾸려면 위 "전체 편집"</span>`;
+  }
   const members=m.members||[], status=m.status||[];
   members.forEach((name,i)=>{
     const st=status[i]||{};
@@ -1242,7 +1250,7 @@ window.syncGongeumField=function(){
 };
 
 window.openAddMeeting=function(){
-  editMeetingId=null;editMembers=[];editGuests=[];editGuestGroup="";selectedType="jeongmo";
+  editMeetingId=null;editMeetingColl="gbd_meetings";editMembers=[];editGuests=[];editGuestGroup="";selectedType="jeongmo";
   document.getElementById("modal-title-txt").textContent="새 모임 추가";
   document.getElementById("m-guest-group").value="";
   document.getElementById("m-date").value=new Date().toISOString().slice(0,10);
@@ -1255,13 +1263,14 @@ window.openAddMeeting=function(){
   document.getElementById("meeting-modal").classList.add("open");
 };
 
-window.openEditMeeting=function(){
-  const m=meetings.find(m=>m.id===currentMeetingId);
+// 현재 모임·지난 모임(아카이브)이 같은 편집 모달을 쓴다. coll 로 어디에 되돌려 쓸지 기억한다.
+function openMeetingEditor(m,coll,title){
   if(!m) return;
-  editMeetingId=currentMeetingId;editMembers=[...(m.members||[])];editGuests=guestRoster(m);editGuestGroup=m.guestGroup||"";
+  editMeetingId=m.id;editMeetingColl=coll;
+  editMembers=[...(m.members||[])];editGuests=guestRoster(m);editGuestGroup=m.guestGroup||"";
   selectedType=m.type||"jeongmo";
   document.getElementById("m-guest-group").value=editGuestGroup;
-  document.getElementById("modal-title-txt").textContent="모임 편집";
+  document.getElementById("modal-title-txt").textContent=title;
   document.getElementById("m-date").value=m.date||"";
   document.getElementById("m-time").value=m.startTime||"";
   document.getElementById("m-gym").value=m.gym||"";
@@ -1270,6 +1279,18 @@ window.openEditMeeting=function(){
   document.getElementById("m-password").value=m.password||"";
   selectType(selectedType);renderMemberEditList();renderGuestEditList();
   document.getElementById("meeting-modal").classList.add("open");
+}
+
+window.openEditMeeting=function(){
+  openMeetingEditor(meetings.find(m=>m.id===currentMeetingId),"gbd_meetings","모임 편집");
+};
+
+// 지난 모임 전체 편집 — 아카이브 카드 → 수정 모달 → "전체 편집"
+window.openArchiveFullEdit=function(){
+  const m=archives.find(a=>a.id===currentArchiveEditId);
+  if(!m) return;
+  const dateStr=m.date?m.date.replace(/-/g,"."):"";
+  openMeetingEditor(m,"gbd_archive",`지난 모임 편집 · ${dateStr}`);
 };
 
 window.closeMeetingModal=function(){document.getElementById("meeting-modal").classList.remove("open");};
@@ -1294,14 +1315,19 @@ window.saveMeeting=async function(){
   const password=document.getElementById("m-password").value.trim();
   if(password && !/^\d{4}$/.test(password)){alert("출석 비밀번호는 숫자 4자리로 설정하거나 비워주세요!");return;}
   const id=editMeetingId||`meeting_${Date.now()}`;
-  const existing=editMeetingId?meetings.find(m=>m.id===editMeetingId):null;
-  const status=existing?(existing.status||members.map(()=>({attend:false,late:false,cancel:false,pay:false}))):members.map(()=>({attend:false,late:false,cancel:false,pay:false}));
+  const existing=editMeetingId?[...meetings,...archives].find(m=>m.id===editMeetingId):null;
+  // 출석 상태는 이름으로 따라간다. 인덱스로 물려두면 중간 인원을 빼는 순간 뒷사람 출석이 한 칸씩 밀린다.
+  const blank={attend:false,late:false,cancel:false,absent:false,pay:false};
+  const oldNames=(existing&&existing.members)||[], oldStat=(existing&&existing.status)||[];
+  const status=members.map(n=>{ const j=oldNames.indexOf(n); return j>=0&&oldStat[j]?oldStat[j]:{...blank}; });
   const guestGroup=(document.getElementById("m-guest-group").value||"").trim();
   const guestNames=editGuests.filter(n=>n&&n.trim()).map(n=>n.trim());
   const prevNames=guestRoster(existing), prevStat=guestStat(existing);
   const guestStatus=guestNames.map(n=>{ const j=prevNames.indexOf(n); return j>=0?prevStat[j]:{attend:false,late:false}; });  // 기존 게스트 출석상태 보존
-  await setDoc(doc(db,"gbd_meetings",id),{type:selectedType,date,startTime,gym,fee,gongeum,members,status,password,guestGroup,guests:guestNames,guestStatus});
-  currentMeetingId=id;window.closeMeetingModal();
+  const {id:_dropId,...prev}=existing||{};   // archivedAt 등 나머지 필드 보존 (통째 덮어쓰면 지난 모임 표시가 깨진다)
+  await setDoc(doc(db,editMeetingColl,id),{...prev,type:selectedType,date,startTime,gym,fee,gongeum,members,status,password,guestGroup,guests:guestNames,guestStatus});
+  if(editMeetingColl==="gbd_meetings") currentMeetingId=id;
+  window.closeMeetingModal();
 };
 
 function renderMemberEditList(){
@@ -1592,7 +1618,9 @@ window.backToMeetingSelect=function(){
   <div class="modal-header">
     <button class="modal-cancel" onclick="closeArchiveEdit()">← 닫기</button>
     <div id="archive-modal-title" style="font-size:13px;font-weight:900;color:#eee;letter-spacing:.05em;flex:1;padding:0 12px;"></div>
+    <button class="modal-cancel" onclick="openArchiveFullEdit()" style="color:#c8f542;border-color:rgba(200,245,66,.4);">✎ 전체 편집</button>
   </div>
+  <div id="archive-modal-info" style="padding:10px 16px 0;font-size:10px;color:#555;letter-spacing:.05em;"></div>
   <div id="archive-modal-body" style="padding:8px 16px 80px;display:flex;flex-direction:column;gap:5px;"></div>
 </div>
 </body>
