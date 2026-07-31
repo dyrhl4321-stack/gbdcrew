@@ -276,9 +276,17 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
       <input class="m-input" id="m-gym" placeholder="스포애니 강남점">
     </div>
     <div>
-      <div class="m-label">— 선입금 금액</div>
-      <input class="m-input" id="m-fee" type="number" placeholder="선입금 없으면 비워두세요" style="margin-bottom:4px;">
-      <div style="font-size:9px;color:#333;letter-spacing:.08em;">불참·취소자 발생 시 공금으로 자동 적립 · 비워두면 공금 안 쌓임(등산벙 등)</div>
+      <div class="m-label">— 공금</div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:9px 10px;border:1px solid #222;background:#0f0f0f;margin-bottom:8px;">
+        <input type="checkbox" id="m-gongeum-on" checked onchange="syncGongeumField()" style="width:16px;height:16px;accent-color:#c8f542;">
+        <span style="font-size:11px;letter-spacing:.05em;color:#c8f542;font-weight:700;">이 모임의 공금을 내가 받는다</span>
+      </label>
+      <div id="fee-wrap">
+        <div class="m-label">— 선입금 금액</div>
+        <input class="m-input" id="m-fee" type="number" placeholder="15000" style="margin-bottom:4px;">
+        <div style="font-size:9px;color:#333;letter-spacing:.08em;">불참·취소자 1명당 이 금액이 공금으로 적립</div>
+      </div>
+      <div id="fee-off-note" style="display:none;font-size:9px;color:#444;letter-spacing:.08em;padding:2px 0 0;">공금 미적립 모임 — 불참·취소가 나와도 공금이 쌓이지 않습니다(등산벙, 공금을 안 받는 모임)</div>
     </div>
     <div>
       <div class="m-label">— 출석 비밀번호 (선택 · 숫자 4자리)</div>
@@ -489,7 +497,7 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, collection, setDoc, deleteDoc, onSnapshot, orderBy, query, getDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, collection, setDoc, updateDoc, deleteDoc, onSnapshot, orderBy, query, getDoc, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBAdgC1pYJ9bAEWGTO_UoP4C84Q1d_jVtw",
@@ -763,7 +771,7 @@ function renderCurrentMeeting(){
   const absent=status.filter(s=>s&&s.absent).length;
   const unchecked=members.length-(att+late+cancel+absent);
   const fee=m.fee||0;
-  const gongeum=(absent+cancel)*fee;
+  const gongeum=gongeumAmt(m);
   // 게스트: total·출석에만 포함(지각/입금/공금은 근방단 전용 로직이라 미포함)
   const gNames=guestRoster(m), gSt=guestStat(m);
   let gTotal=0, gAtt=0;
@@ -779,8 +787,8 @@ function renderCurrentMeeting(){
   // 공금 표시
   const geEl=document.getElementById("gongeum-display");
   if(geEl){
-    if(fee>0){ geEl.style.color="#c8f542"; geEl.textContent=`💰 공금 +${gongeum.toLocaleString()}원 (불참${absent}+취소${cancel})×${fee.toLocaleString()}원`; }
-    else { geEl.style.color="#555"; geEl.textContent="선입금 없는 모임 — 공금 안 쌓임"; }   // 미입력 모임임을 눈으로 확인 가능하게
+    if(gongeumOn(m)){ geEl.style.color="#c8f542"; geEl.textContent=`💰 공금 +${gongeum.toLocaleString()}원 (불참${absent}+취소${cancel})×${fee.toLocaleString()}원`; }
+    else { geEl.style.color="#555"; geEl.textContent="공금 미적립 모임 — 불참·취소가 나와도 공금이 안 쌓입니다"; }
   }
   const list=document.getElementById("member-list");
   list.innerHTML="";
@@ -1002,27 +1010,34 @@ function renderStatsPage(){
   document.getElementById("sum-absent").textContent=totalAbsent;
   document.getElementById("sum-warn").textContent=totalWarn;
 
-  // 공금 계산
+  // 공금 계산 — 모임마다 체크박스로 적립 on/off (공금을 내가 받는 모임만 켠다)
   const gongeumList=document.getElementById("gongeum-list");
   gongeumList.innerHTML="";
-  let totalGongeum=0;
+  let totalGongeum=0, gongeumRows=0;
   allMeetings.forEach(m=>{
-    if(!m.date||!m.fee) return;
+    if(!m.date||!(m.fee>0)) return;
     // 취소/불참은 status에 반영되는 순간 즉시 공금 적립 (미래 벙 취소 포함)
     const members2=m.members||[], status2=m.status||[];
     const absentCnt=members2.filter((_,i)=>status2[i]&&status2[i].absent).length;
     const cancelCnt=members2.filter((_,i)=>status2[i]&&status2[i].cancel).length;
+    if(absentCnt+cancelCnt<=0) return;
+    const on=gongeumOn(m);
     const amt=(absentCnt+cancelCnt)*m.fee;
-    if(amt<=0) return;
-    totalGongeum+=amt;
+    if(on) totalGongeum+=amt;
+    gongeumRows++;
     const dateStr=m.date.replace(/-/g,".");
     const typeStr=m.type==="jeongmo"?"정모":"벙";
     const row=document.createElement("div");
-    row.style.cssText="display:flex;justify-content:space-between;align-items:center;font-size:11px;";
-    row.innerHTML=`<span style="color:#555;">${dateStr} ${typeStr} · 불참${absentCnt}+취소${cancelCnt}명</span>
-      <span style="color:#c8f542;font-weight:700;">+${amt.toLocaleString()}원</span>`;
+    row.style.cssText="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;";
+    row.innerHTML=`<label style="display:flex;align-items:center;gap:7px;cursor:pointer;min-width:0;flex:1;">
+        <input type="checkbox" ${on?"checked":""} data-gid="${m.id}" style="width:14px;height:14px;flex:none;accent-color:#c8f542;">
+        <span style="color:${on?"#666":"#333"};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${dateStr} ${typeStr} ${m.gym||""} · 불참${absentCnt}+취소${cancelCnt}명</span>
+      </label>
+      <span style="flex:none;font-weight:700;color:${on?"#c8f542":"#333"};${on?"":"text-decoration:line-through;"}">+${amt.toLocaleString()}원</span>`;
+    row.querySelector("input").onchange=e=>toggleMeetingGongeum(m.id,e.target.checked);
     gongeumList.appendChild(row);
   });
+  if(!gongeumRows) gongeumList.innerHTML=`<span style="font-size:10px;color:#333;">아직 적립된 공금이 없습니다.</span>`;
   document.getElementById("gongeum-total").textContent=totalGongeum.toLocaleString()+"원";
 
   // 경고 알림
@@ -1137,6 +1152,13 @@ function renderArchiveModalMembers(m){
   });
 }
 
+// 공금 적립 on/off — 지난 모임(gbd_archive)도 통계 화면에서 바로 끌 수 있어야 한다
+async function toggleMeetingGongeum(id,on){
+  const inCurrent=meetings.some(m=>m.id===id);
+  const coll=inCurrent?"gbd_meetings":"gbd_archive";
+  await updateDoc(doc(db,coll,id),{gongeum:!!on});   // 필드 하나만 갱신(문서 통째 덮어쓰기 금지)
+}
+
 window.toggleArchiveAttend=async function(id,i){
   const m=archives.find(a=>a.id===id);
   if(!m) return;
@@ -1203,6 +1225,22 @@ async function applyDeduct(name){
 }
 
 // ── 모임 추가/편집 ──
+// ── 공금 적립 여부 ──
+// gongeum:false 로 저장된 모임만 미적립. 필드가 없는 옛 모임은 기존처럼 적립(true)로 본다.
+function gongeumOn(m){ return m.gongeum!==false && (m.fee||0)>0; }
+function gongeumAmt(m){
+  if(!gongeumOn(m)) return 0;
+  const st=m.status||[], mem=m.members||[];
+  const absent=mem.filter((_,i)=>st[i]&&st[i].absent).length;
+  const cancel=mem.filter((_,i)=>st[i]&&st[i].cancel).length;
+  return (absent+cancel)*(m.fee||0);
+}
+window.syncGongeumField=function(){
+  const on=document.getElementById("m-gongeum-on").checked;
+  document.getElementById("fee-wrap").style.display=on?"block":"none";
+  document.getElementById("fee-off-note").style.display=on?"none":"block";
+};
+
 window.openAddMeeting=function(){
   editMeetingId=null;editMembers=[];editGuests=[];editGuestGroup="";selectedType="jeongmo";
   document.getElementById("modal-title-txt").textContent="새 모임 추가";
@@ -1211,6 +1249,7 @@ window.openAddMeeting=function(){
   document.getElementById("m-time").value="";
   document.getElementById("m-gym").value="";
   document.getElementById("m-fee").value="";
+  document.getElementById("m-gongeum-on").checked=true; syncGongeumField();
   document.getElementById("m-password").value="";
   selectType("jeongmo");renderMemberEditList();renderGuestEditList();
   document.getElementById("meeting-modal").classList.add("open");
@@ -1227,6 +1266,7 @@ window.openEditMeeting=function(){
   document.getElementById("m-time").value=m.startTime||"";
   document.getElementById("m-gym").value=m.gym||"";
   document.getElementById("m-fee").value=m.fee>0?m.fee:"";   // 선입금 없는 벙(등산벙 등)은 빈칸 유지 — 기본값 15000을 넣으면 편집만 해도 공금이 쌓인다
+  document.getElementById("m-gongeum-on").checked=m.gongeum!==false; syncGongeumField();
   document.getElementById("m-password").value=m.password||"";
   selectType(selectedType);renderMemberEditList();renderGuestEditList();
   document.getElementById("meeting-modal").classList.add("open");
@@ -1249,7 +1289,8 @@ window.saveMeeting=async function(){
   const gym=document.getElementById("m-gym").value.trim();
   const members=editMembers.filter(m=>m.trim());
   if(!date||!gym||!members.length){alert("날짜, 헬스장, 인원을 모두 입력해주세요!");return;}
-  const fee=parseInt(document.getElementById("m-fee").value)||0;
+  const gongeum=document.getElementById("m-gongeum-on").checked;
+  const fee=parseInt(document.getElementById("m-fee").value)||0;   // 미적립이어도 금액은 보존(다시 켜면 그대로 살아남)
   const password=document.getElementById("m-password").value.trim();
   if(password && !/^\d{4}$/.test(password)){alert("출석 비밀번호는 숫자 4자리로 설정하거나 비워주세요!");return;}
   const id=editMeetingId||`meeting_${Date.now()}`;
@@ -1259,7 +1300,7 @@ window.saveMeeting=async function(){
   const guestNames=editGuests.filter(n=>n&&n.trim()).map(n=>n.trim());
   const prevNames=guestRoster(existing), prevStat=guestStat(existing);
   const guestStatus=guestNames.map(n=>{ const j=prevNames.indexOf(n); return j>=0?prevStat[j]:{attend:false,late:false}; });  // 기존 게스트 출석상태 보존
-  await setDoc(doc(db,"gbd_meetings",id),{type:selectedType,date,startTime,gym,fee,members,status,password,guestGroup,guests:guestNames,guestStatus});
+  await setDoc(doc(db,"gbd_meetings",id),{type:selectedType,date,startTime,gym,fee,gongeum,members,status,password,guestGroup,guests:guestNames,guestStatus});
   currentMeetingId=id;window.closeMeetingModal();
 };
 
