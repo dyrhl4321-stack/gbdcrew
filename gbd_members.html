@@ -63,6 +63,7 @@
     <div class="sum">
       <div><b id="s-total">0</b>전체</div>
       <div><b id="s-chick">0</b>병아리</div>
+      <div><b id="s-ok">0</b>정상</div>
       <div><b id="s-kick">0</b>퇴출 대상</div>
       <div><b id="s-removed">0</b>제외됨</div>
     </div>
@@ -71,6 +72,7 @@
       <button class="flt on" data-f="all">전체</button>
       <button class="flt" data-f="new">🐤 병아리</button>
       <button class="flt" data-f="old">기존</button>
+      <button class="flt" data-f="ok">✅ 정상</button>
       <button class="flt" data-f="kick">퇴출 대상</button>
       <button class="flt" data-f="removed">제외됨</button>
       <input id="q" placeholder="이름·닉네임 검색" style="margin-left:auto">
@@ -138,7 +140,7 @@ async function load() {
 /* ---------------- 렌더 ---------------- */
 function render() {
   const rows = [];
-  let nChick = 0, nKick = 0, nRemoved = 0;
+  let nChick = 0, nKick = 0, nRemoved = 0, nOk = 0;
 
   const sorted = [...state.members].sort((a, b) => a.name.localeCompare(b.name, "ko"));
   for (const m of sorted) {
@@ -150,6 +152,7 @@ function render() {
     if (v.code === "removed") nRemoved++;
     else if (type === "new") nChick++;
     if (v.code === "kick") nKick++;
+    if (v.code === "ok") nOk++;
 
     if (!passFilter(m, type, v)) continue;
     rows.push(rowHtml(m, att, v, type));
@@ -158,6 +161,7 @@ function render() {
   $("#rows").innerHTML = rows.join("") || `<tr><td colspan="13" class="hint">해당하는 회원이 없습니다.</td></tr>`;
   $("#s-total").textContent = state.members.length;
   $("#s-chick").textContent = nChick;
+  $("#s-ok").textContent = nOk;
   $("#s-kick").textContent = nKick;
   $("#s-removed").textContent = nRemoved;
   renderOrphans();
@@ -170,6 +174,7 @@ function passFilter(m, type, v) {
   if (f === "all") return v.code !== "removed";
   if (f === "removed") return v.code === "removed";
   if (f === "kick") return v.code === "kick";
+  if (f === "ok") return v.code === "ok";        // 판정 "정상"만 (유예중·판정보류·퇴출·제외 전부 빠짐)
   if (f === "new") return v.code !== "removed" && type === "new";
   if (f === "old") return v.code !== "removed" && type === "old";
   return true;

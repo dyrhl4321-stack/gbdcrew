@@ -277,8 +277,8 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
     </div>
     <div>
       <div class="m-label">— 선입금 금액</div>
-      <input class="m-input" id="m-fee" type="number" placeholder="15000" style="margin-bottom:4px;">
-      <div style="font-size:9px;color:#333;letter-spacing:.08em;">불참·취소자 발생 시 공금으로 자동 적립</div>
+      <input class="m-input" id="m-fee" type="number" placeholder="선입금 없으면 비워두세요" style="margin-bottom:4px;">
+      <div style="font-size:9px;color:#333;letter-spacing:.08em;">불참·취소자 발생 시 공금으로 자동 적립 · 비워두면 공금 안 쌓임(등산벙 등)</div>
     </div>
     <div>
       <div class="m-label">— 출석 비밀번호 (선택 · 숫자 4자리)</div>
@@ -778,7 +778,10 @@ function renderCurrentMeeting(){
   if(tb){ if(gTotal>0){ tb.style.display="block"; tb.innerHTML="근방단 "+members.length+"<br>게스트 "+gTotal; } else tb.style.display="none"; }
   // 공금 표시
   const geEl=document.getElementById("gongeum-display");
-  if(geEl) geEl.textContent=fee>0?`💰 공금 +${gongeum.toLocaleString()}원 (불참${absent}+취소${cancel})×${fee.toLocaleString()}원`:"";
+  if(geEl){
+    if(fee>0){ geEl.style.color="#c8f542"; geEl.textContent=`💰 공금 +${gongeum.toLocaleString()}원 (불참${absent}+취소${cancel})×${fee.toLocaleString()}원`; }
+    else { geEl.style.color="#555"; geEl.textContent="선입금 없는 모임 — 공금 안 쌓임"; }   // 미입력 모임임을 눈으로 확인 가능하게
+  }
   const list=document.getElementById("member-list");
   list.innerHTML="";
   members.forEach((name,i)=>{
@@ -1223,7 +1226,7 @@ window.openEditMeeting=function(){
   document.getElementById("m-date").value=m.date||"";
   document.getElementById("m-time").value=m.startTime||"";
   document.getElementById("m-gym").value=m.gym||"";
-  document.getElementById("m-fee").value=m.fee||15000;
+  document.getElementById("m-fee").value=m.fee>0?m.fee:"";   // 선입금 없는 벙(등산벙 등)은 빈칸 유지 — 기본값 15000을 넣으면 편집만 해도 공금이 쌓인다
   document.getElementById("m-password").value=m.password||"";
   selectType(selectedType);renderMemberEditList();renderGuestEditList();
   document.getElementById("meeting-modal").classList.add("open");
