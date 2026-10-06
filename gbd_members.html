@@ -34,6 +34,8 @@
   .badge.chick { background:var(--chick); color:#3a2c00; }
   .badge.old { background:#2b3350; color:#b7c0d4; }
   .murpy-on { color:#7aa8ff; font-weight:700; font-size:12px; white-space:nowrap; }
+  .murpy-how { font-size:10px; color:#8a93a8; border:1px solid #2b3350; padding:1px 5px; white-space:nowrap; }
+  .murpy-how.self { color:#6dc26d; border-color:#2e5a2e; }
   .badge.leader { background:#ffb020; color:#3a2600; }
   .badge.staff { background:#3d7eff; color:#fff; }
   .v.kick { color:var(--kick); font-weight:700; }
@@ -189,6 +191,15 @@ function passFilter(m, type, v) {
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+// 머피 연결 표시 — 짝은 머피 서버가 쓴다(murpyUid·murpyNick·murpyAlts·murpyAuto·murpySelf). 여기선 읽기만.
+//   본인확인 = 그 사람이 앱에서 직접 "근방단 ○○○ 맞아요"를 누름 / 자동 = 이름·출생년도·스쿼드 참여로 서버가 연결
+function murpyCell(m) {
+  if (!m.murpyUid) return m.murpyNone ? `<span class="hint">미가입</span>` : `<span class="hint">—</span>`;
+  const how = m.murpySelf ? `<span class="murpy-how self">본인확인</span>` : m.murpyAuto ? `<span class="murpy-how">자동</span>` : "";
+  const alts = (m.murpyAlts || []).length ? ` <span class="hint">+${m.murpyAlts.length}계정</span>` : "";
+  return `<span class="murpy-on">${esc(m.murpyNick || "연결됨")}</span> ${how}${alts}`;
+}
+
 function rowHtml(m, att, v, type) {
   const id = esc(m.id);
   const typeSel = `<select data-edit="type" data-id="${id}">
@@ -207,7 +218,7 @@ function rowHtml(m, att, v, type) {
   return `<tr class="${v.code === "kick" ? "kick" : ""} ${m.status === "removed" ? "removed" : ""}">
     <td>${roleBadge}<input data-rename data-id="${id}" value="${esc(m.name)}" size="6"></td>
     <td><input data-edit="nickname" data-id="${id}" value="${esc(m.nickname)}" size="7"></td>
-    <td class="murpy">${m.murpyUid ? `<span class="murpy-on">${esc(m.murpyNick || "연결됨")}</span>` : m.murpyNone ? `<span class="hint">미가입</span>` : `<span class="hint">—</span>`}</td>
+    <td class="murpy">${murpyCell(m)}</td>
     <td><input data-edit="birth" data-id="${id}" value="${esc(m.birth)}" size="4" inputmode="numeric"></td>
     <td><input data-edit="region" data-id="${id}" value="${esc(m.region)}" size="6"></td>
     <td>${typeSel}</td>
