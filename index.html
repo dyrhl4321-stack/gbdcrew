@@ -197,7 +197,12 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
 .member-add-row{display:flex;gap:8px;margin-bottom:8px;}
 .member-add-inp{flex:1;background:#141414;border:1px solid #1e1e1e;color:#e8e8e8;padding:12px 14px;font-size:14px;font-family:inherit;outline:none;}
 .member-add-btn{background:#c8f542;border:none;color:#000;font-size:18px;font-weight:900;width:46px;cursor:pointer;flex-shrink:0;}
-.edit-row{display:flex;gap:8px;margin-bottom:6px;}
+.edit-row{display:flex;gap:8px;margin-bottom:6px;align-items:center;}
+.roster-slot{flex-shrink:0;display:flex;align-items:center}
+.edit-row .del-btn{align-self:stretch}
+.roster-tag{font-size:10px;letter-spacing:.02em;white-space:nowrap;padding:2px 6px;border:1px solid}
+.roster-tag.warn{color:#ffa500;border-color:#5a3d00}
+.roster-tag.chick{color:#ffd54a;border-color:#5a4a00}
 .edit-row input{flex:1;background:#141414;border:1px solid #1e1e1e;color:#e8e8e8;padding:11px 14px;font-size:13px;font-family:inherit;outline:none;}
 .del-btn{background:#141414;border:1px solid #1e1e1e;color:#444;font-size:13px;width:42px;cursor:pointer;flex-shrink:0;}
 .member-count{font-size:9px;color:#333;letter-spacing:.15em;margin-bottom:8px;}
@@ -296,7 +301,7 @@ body{background:#0a0a0a;color:#f0f0f0;font-family:"Apple SD Gothic Neo","Noto Sa
     <div>
       <div class="m-label">— 참석자 명단</div>
       <div class="member-add-row">
-        <input class="member-add-inp" id="new-member-inp" placeholder="이름 입력 후 + 버튼" onkeydown="if(event.key==='Enter')addMemberToList()">
+        <input class="member-add-inp" id="new-member-inp" list="gbd-roster-list" placeholder="이름 (두 글자 치면 명부에서)" onkeydown="if(event.key==='Enter')addMemberToList()">
         <button class="member-add-btn" onclick="addMemberToList()">+</button>
       </div>
       <div class="member-count" id="member-count">0명</div>
@@ -518,6 +523,31 @@ const ADMIN_PW = "5252";
 const LATE_MINUTES = 5; // 지각 기준: 시작 후 5분
 
 let meetings=[], archives=[], memberStats={}, currentMeetingId=null, currentArchiveEditId=null;
+
+// ★10-06 명부(멤버스) → 출첵 연결. 모임 명단은 이름 글자로 출석이 맞춰지는데 지금까지 손으로 타이핑해서
+//   오타·나간 사람이 그대로 들어갔다. 명부를 실시간으로 받아 ① 이름 자동완성 ② 명부에 없는 이름 표시
+//   ③ 병아리(신입, 아직 출석 0) 표시. 막지는 않는다 — 게스트·방금 온 사람일 수 있다.
+let gbdRoster={};   // 이름 → {status,type,bungDate}
+onSnapshot(collection(db,"gbd_members"),snap=>{
+  const r={}; snap.forEach(d=>{ const m=d.data()||{}; r[m.name||d.id]={status:m.status||"active",type:m.type||"old",bungDate:m.bungDate||null}; });
+  gbdRoster=r;
+  let dl=document.getElementById("gbd-roster-list");
+  if(!dl){ dl=document.createElement("datalist"); dl.id="gbd-roster-list"; document.body.appendChild(dl); }
+  dl.innerHTML=Object.keys(r).filter(n=>r[n].status!=="removed").sort((a,b)=>a.localeCompare(b,"ko")).map(n=>'<option value="'+n.replace(/"/g,"&quot;")+'">').join("");
+  if(document.getElementById("member-edit-list")&&document.getElementById("meeting-modal")?.classList.contains("open")) renderMemberEditList();
+},e=>console.warn("명부 구독 실패",e));
+// 병아리 = 명부에 신입으로 등록 + 아직 한 번도 출석(지각 포함) 안 함 — 멤버스의 졸업 규칙과 같다
+function rosterTag(name){
+  const n=(name||"").trim(); if(!n) return "";
+  const r=gbdRoster[n];
+  if(!r) return Object.keys(gbdRoster).length?'<span class="roster-tag warn">명부에 없음</span>':"";
+  if(r.status==="removed") return '<span class="roster-tag warn">나간 사람</span>';
+  if(r.type==="new"&&!r.bungDate){
+    const went=[...meetings,...archives].some(m=>{ const i=(m.members||[]).indexOf(n); const st=i>=0?((m.status||[])[i]||{}):null; return st&&(st.attend||st.late); });
+    if(!went) return '<span class="roster-tag chick">🐤 병아리</span>';
+  }
+  return "";
+}
 let editMeetingId=null, selectedType="jeongmo", editMembers=[], editGuests=[], editGuestGroup="";
 let editMeetingColl="gbd_meetings";   // 편집 중인 모임이 어느 컬렉션 소속인지 — 지난 모임은 gbd_archive 로 되돌려 써야 한다
 // 게스트 헬퍼: guests=닉네임 배열(로스터), guestStatus=[{attend,late}] 평행. 구버전([{name,late,t}])도 정규화.
@@ -1335,11 +1365,12 @@ function renderMemberEditList(){
   document.getElementById("member-count").textContent=`${editMembers.filter(m=>m.trim()).length}명`;
   editMembers.forEach((name,i)=>{
     const row=document.createElement("div");row.className="edit-row";
-    const inp=document.createElement("input");inp.value=name;
-    inp.oninput=()=>{editMembers[i]=inp.value;document.getElementById("member-count").textContent=`${editMembers.filter(m=>m.trim()).length}명`;};
+    const inp=document.createElement("input");inp.value=name;inp.setAttribute("list","gbd-roster-list");
+    const tag=document.createElement("span");tag.className="roster-slot";tag.innerHTML=rosterTag(name);
+    inp.oninput=()=>{editMembers[i]=inp.value;tag.innerHTML=rosterTag(inp.value);document.getElementById("member-count").textContent=`${editMembers.filter(m=>m.trim()).length}명`;};
     const del=document.createElement("button");del.className="del-btn";del.textContent="✕";
     del.onclick=()=>{editMembers.splice(i,1);renderMemberEditList();};
-    row.appendChild(inp);row.appendChild(del);c.appendChild(row);
+    row.appendChild(inp);row.appendChild(tag);row.appendChild(del);c.appendChild(row);
   });
 }
 
