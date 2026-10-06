@@ -33,6 +33,7 @@
   .badge { border-radius:999px; padding:2px 8px; font-size:11px; font-weight:700; }
   .badge.chick { background:var(--chick); color:#3a2c00; }
   .badge.old { background:#2b3350; color:#b7c0d4; }
+  .murpy-on { color:#7aa8ff; font-weight:700; font-size:12px; white-space:nowrap; }
   .badge.leader { background:#ffb020; color:#3a2600; }
   .badge.staff { background:#3d7eff; color:#fff; }
   .v.kick { color:var(--kick); font-weight:700; }
@@ -66,6 +67,7 @@
       <div><b id="s-ok">0</b>정상</div>
       <div><b id="s-kick">0</b>퇴출 대상</div>
       <div><b id="s-removed">0</b>제외됨</div>
+      <div><b id="s-murpy">0</b>머피 연결</div>
     </div>
 
     <div class="bar">
@@ -75,6 +77,7 @@
       <button class="flt" data-f="ok">✅ 정상</button>
       <button class="flt" data-f="kick">퇴출 대상</button>
       <button class="flt" data-f="removed">제외됨</button>
+      <button class="flt" data-f="nomurpy">머피 미연결</button>
       <input id="q" placeholder="이름·닉네임 검색" style="margin-left:auto">
       <button id="add">＋ 회원 추가</button>
       <button id="seed">초기 데이터 넣기</button>
@@ -82,7 +85,7 @@
 
     <table>
       <thead><tr>
-        <th>이름</th><th>닉네임</th><th>출생</th><th>지역</th><th>구분</th><th>역할</th>
+        <th>이름</th><th>닉네임</th><th>머피</th><th>출생</th><th>지역</th><th>구분</th><th>역할</th>
         <th>가입일</th><th>출석</th><th>마지막 출석</th><th>벙 출석일</th><th>최근 2개월</th><th>판정</th><th></th>
       </tr></thead>
       <tbody id="rows"></tbody>
@@ -140,7 +143,7 @@ async function load() {
 /* ---------------- 렌더 ---------------- */
 function render() {
   const rows = [];
-  let nChick = 0, nKick = 0, nRemoved = 0, nOk = 0;
+  let nChick = 0, nKick = 0, nRemoved = 0, nOk = 0, nMurpy = 0;
 
   const sorted = [...state.members].sort((a, b) => a.name.localeCompare(b.name, "ko"));
   for (const m of sorted) {
@@ -153,30 +156,34 @@ function render() {
     else if (type === "new") nChick++;
     if (v.code === "kick") nKick++;
     if (v.code === "ok") nOk++;
+    if (v.code !== "removed" && m.murpyUid) nMurpy++;
 
     if (!passFilter(m, type, v)) continue;
     rows.push(rowHtml(m, att, v, type));
   }
 
-  $("#rows").innerHTML = rows.join("") || `<tr><td colspan="13" class="hint">해당하는 회원이 없습니다.</td></tr>`;
+  $("#rows").innerHTML = rows.join("") || `<tr><td colspan="14" class="hint">해당하는 회원이 없습니다.</td></tr>`;
   $("#s-total").textContent = state.members.length;
   $("#s-chick").textContent = nChick;
   $("#s-ok").textContent = nOk;
   $("#s-kick").textContent = nKick;
   $("#s-removed").textContent = nRemoved;
+  $("#s-murpy").textContent = nMurpy;
   renderOrphans();
 }
 
 function passFilter(m, type, v) {
   const f = state.filter;
   const q = state.q.trim();
-  if (q && !(m.name.includes(q) || (m.nickname || "").includes(q))) return false;
+  if (q && !(m.name.includes(q) || (m.nickname || "").includes(q) || (m.murpyNick || "").includes(q))) return false;
   if (f === "all") return v.code !== "removed";
   if (f === "removed") return v.code === "removed";
   if (f === "kick") return v.code === "kick";
   if (f === "ok") return v.code === "ok";        // 판정 "정상"만 (유예중·판정보류·퇴출·제외 전부 빠짐)
   if (f === "new") return v.code !== "removed" && type === "new";
   if (f === "old") return v.code !== "removed" && type === "old";
+  // ★10-06 머피 연결 — 짝은 머피 관리자 화면(근방단 멤버 연결)에서 저장된다. 여기선 보여주기만.
+  if (f === "nomurpy") return v.code !== "removed" && !m.murpyUid && !m.murpyNone;
   return true;
 }
 
@@ -200,6 +207,7 @@ function rowHtml(m, att, v, type) {
   return `<tr class="${v.code === "kick" ? "kick" : ""} ${m.status === "removed" ? "removed" : ""}">
     <td>${roleBadge}<input data-rename data-id="${id}" value="${esc(m.name)}" size="6"></td>
     <td><input data-edit="nickname" data-id="${id}" value="${esc(m.nickname)}" size="7"></td>
+    <td class="murpy">${m.murpyUid ? `<span class="murpy-on">${esc(m.murpyNick || "연결됨")}</span>` : m.murpyNone ? `<span class="hint">미가입</span>` : `<span class="hint">—</span>`}</td>
     <td><input data-edit="birth" data-id="${id}" value="${esc(m.birth)}" size="4" inputmode="numeric"></td>
     <td><input data-edit="region" data-id="${id}" value="${esc(m.region)}" size="6"></td>
     <td>${typeSel}</td>
