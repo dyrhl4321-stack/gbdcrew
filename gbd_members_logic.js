@@ -42,7 +42,8 @@ export function computeAttendance(meetings, today) {
 /** 운영 역할 기본값. 저장된 role 이 없는 회원에게 이 표를 적용한다. */
 export const DEFAULT_ROLES = {
   "김현수": "leader",
-  "최다윤": "staff", "김준성": "staff", "유사랑": "staff",
+  // 10-08 대표: 유사랑 운영진·모임 탈퇴 → 박기웅·임준규로 대체
+  "최다윤": "staff", "김준성": "staff", "박기웅": "staff", "임준규": "staff",
   "함성훈": "staff", "안효정": "staff", "윤득원": "staff",
 };
 
